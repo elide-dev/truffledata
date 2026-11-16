@@ -105,6 +105,71 @@ java_test(
     ],
 )
 
+# Design step 10: the Java kernel differential against the opt-in Rust-backed shared library
+# (granit-parser behind rust_source.h), selected through the existing yaml.library property.
+java_test(
+    name = "jvm_rs",
+    srcs = [
+        "JavaKernelDifferentialTest.java",
+        "JavaKernelTest.java",
+        "JsonSubsetDifferentialTest.java",
+        "ScalarResolverTest.java",
+        "SnakeYamlDifferentialTest.java",
+        "SnakeYamlEventSourceTest.java",
+        "YamlContractTest.java",
+        "YamlEmitterTest.java",
+        "YamlFuzz.java",
+        "YamlIntegrationTest.java",
+        "YamlPlanTest.java",
+    ],
+    args = [
+        "--class",
+        "dev.elide.truffledata.yaml.tests.JavaKernelDifferentialTest",
+    ],
+    data = [
+        "java_kernel_excluded.txt",
+        "java_kernel_excluded_rs.txt",
+        "snakeyaml_engine_excluded.txt",
+        "//json/native:json_shared.so",
+        "//yaml/native:testdata",
+        "//yaml/native:yaml_rs_shared.so",
+        "@yaml_test_suite//:cases",
+    ],
+    jvm_flags = [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dpolyglot.engine.WarnInterpreterOnly=false",
+        "-Dyaml.library=$(rootpath //yaml/native:yaml_rs_shared.so)",
+        "-Dyaml.kernel.excluded=yaml/tests/java_kernel_excluded_rs.txt",
+        "-Dyaml.kernel.backend=rust",
+        "-ea",
+    ],
+    main_class = "dev.elide.bazel.junit.BazelJUnitRunner",
+    use_testrunner = False,
+    runtime_deps = [
+        "//bazel/junit:runner",
+        "@maven//:org_graalvm_truffle_truffle_runtime",
+    ],
+    deps = [
+        ":acceptance",
+        "//benchmarks/comparison:json_fixture",
+        "//core",
+        "//json",
+        "//json:jvm",
+        "//tape",
+        "//yaml",
+        "//yaml:bindings",
+        "//yaml:java",
+        "//yaml:jvm",
+        "//yaml:snakeyaml",
+        "//yaml:svm",
+        "@maven//:org_graalvm_truffle_truffle_api",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+        "@maven//:org_jspecify_jspecify",
+        "@maven//:org_snakeyaml_snakeyaml_engine",
+        "@myna//:values",
+    ],
+)
+
 native_image(
     name = "native",
     testonly = True,

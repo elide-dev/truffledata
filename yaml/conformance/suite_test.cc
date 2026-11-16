@@ -151,8 +151,18 @@ std::vector<std::string> normalize(const std::string& text) {
   return out;
 }
 
+// The parser whose defects may be listed: rapidyaml, or granit-parser for the opt-in Rust backend
+// (//yaml/conformance:yaml_test_suite_rs, built with TD_YAML_PARSER_RUST).
+#ifdef TD_YAML_PARSER_RUST
+constexpr const char* parser_name = "granit-parser";
+constexpr const char* issue_prefix = "https://github.com/bourumir-wyngs/granit-parser/issues/";
+#else
+constexpr const char* parser_name = "rapidyaml";
+constexpr const char* issue_prefix = "https://github.com/biojppm/rapidyaml/issues/";
+#endif
+
 // Format: `ID<TAB>reason<TAB>upstream link`; `#` comments and blank lines ignored. A case may be
-// listed only for a rapidyaml defect with a biojppm/rapidyaml issue link and a ledger ruling.
+// listed only for a parser defect with an upstream issue link and a ledger ruling.
 std::map<std::string, std::string> read_expected_failures(const std::string& path) {
   std::string text;
   require(read_file(path, &text), "cannot read expected failures " + path);
@@ -167,8 +177,8 @@ std::map<std::string, std::string> read_expected_failures(const std::string& pat
     while (std::getline(cells, cell, '\t')) fields.push_back(cell);
     require(fields.size() == 3, "expected-failure lines are ID<TAB>reason<TAB>link: " + line);
     require(!fields[1].empty(), "expected failure without a reason: " + line);
-    require(fields[2].rfind("https://github.com/biojppm/rapidyaml/issues/", 0) == 0,
-            "expected failure without a rapidyaml issue link: " + line);
+    require(fields[2].rfind(issue_prefix, 0) == 0,
+            std::string("expected failure without a ") + parser_name + " issue link: " + line);
     require(out.emplace(fields[0], fields[1]).second, "duplicate entry " + fields[0]);
   }
   return out;
@@ -242,7 +252,7 @@ int main(int argc, char** argv) {
     }
     for (const auto& entry : expected)
       if (!seen.count(entry.first)) problems.push_back(entry.first + ": listed in expected failures but not a suite case");
-    std::cout << "yaml_test_suite (TruffleData handler): " << passed << "/" << inputs.size() << " passed (valid "
+    std::cout << "yaml_test_suite (TruffleData handler, " << parser_name << "): " << passed << "/" << inputs.size() << " passed (valid "
               << valid_passed << "/" << valid << ", errors detected " << errors_detected << "/" << errors
               << "), expected failures listed: " << expected.size() << "\n";
     for (const auto& problem : problems) std::cerr << "  " << problem << "\n";

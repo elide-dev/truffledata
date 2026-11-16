@@ -1,0 +1,28 @@
+# Reviewed behavioural differences between the rapidyaml and granit-parser backends, read by
+# //yaml/native:differential_test (design step 7). Error statuses must match; messages and
+# positions are not contractual and are not compared.
+#
+# Format, one class per line: CLASS<TAB>KIND<TAB>REGEX<TAB>reason; example
+#   KIND   granit-rejects (rapidyaml accepts), granit-accepts (rapidyaml rejects), or document
+#          (both accept, different documents)
+#   REGEX  ECMAScript regex that must match the input text for the class to explain it
+#
+# Ruling (2026-11-14): where granit-parser is spec-correct (YAML 1.2.2, and it passes the
+# yaml-test-suite 402/402) the Rust backend is the reference and the class is listed here. Where
+# granit looks wrong it is not listed: it is minimised, confirmed against the spec and reported.
+# The list is exact: a class that explains no difference fails the test.
+flow-key-nested	granit-accepts	\n[ -]*[ ]+[\[{][^\n]*[\]}] *:( |\n)	A flow collection as an implicit key of a nested block mapping is valid YAML 1.2 ([154]/[155], complex keys; suite 87E4, M5DY); rapidyaml 0.16.0 reports "parse error" or "multiline scalars cannot be used as keys" there. Example: "a:\n  {k: v}: 1\n"
+flow-key-empty-value	document	\n( *)[\[{][^\n]*[\]}]:\n\1[^ \n]	A flow-collection implicit key with an empty value followed by a key at the same indentation: the next key is a sibling (granit; null value) and rapidyaml nests it under the flow key. Example: "[k1, k2]:\n  x: 1\n" read at one indent
+properties-own-line	document	(^|\n) *- +([!&][^ \n]* *)+\n	Properties alone on a block-sequence entry line apply to the block mapping that follows (YAML 1.2 [200], suite 6BFJ-like); rapidyaml 0.16.0 attaches them to the first key. Example: "- !local\n  ? a\n  : b\n"
+properties-own-line-alias	granit-rejects	(^|\n) *- +&[^ \n]+ *\n	Same as properties-own-line: with the anchor on the mapping, an alias to it inside the mapping is a recursive alias (decoder error); rapidyaml anchors the first key instead. Example: "- &a\n  ? x\n  : *a\n"
+merge-in-flow-pair	granit-rejects	[\[,] *<<: 	A merge key in a flow-sequence single-pair mapping ([<<: [..]]) is a merge key on the Rust path and is validated (a merge source must be a mapping); the rapidyaml path builds that mapping retroactively (handler::retro_map) without merge handling. Example: "[<<: [a, b]]" under mergeKeys
+tag-prefix-brace	granit-rejects	(^|\n)%TAG [^\n]*[{}]	A %TAG prefix is ns-uri-char* (YAML 1.2 [93]-[95]); { and } are not URI characters. Example: "%TAG !e! tag:x,2000:}\n--- a\n"
+plain-starts-with-bracket	granit-rejects	(^|\n|: ?|- )[\]}]	A plain scalar cannot start with ] or } (c-indicator, YAML 1.2 [126]); rapidyaml 0.16.0 accepts it as text. Example: "c: ]\n"
+empty-anchor-name	granit-rejects	&([ \t\n\[\]{},]|$)	An anchor needs at least one ns-anchor-char (YAML 1.2 [101]); rapidyaml accepts an empty name. Example: "&   a1 x\n"
+verbatim-tag-space	granit-rejects	!<[^>\n]* [^>\n]*>	A verbatim tag is ns-uri-char+ (YAML 1.2 [98]) and cannot hold a space; rapidyaml accepts it. Example: "!<!a b> x\n"
+directives-without-marker	granit-rejects	^(%[^\n]*\n)+(?!---)	Directives must be followed by a --- marker (YAML 1.2 [207]/[210]); rapidyaml accepts content right after them. Example: "%YAML 1.2\n- a\n"
+marker-not-separated	granit-rejects	(^|\n)---[^ \t\n-]	--- starts a document only when followed by a blank or line break (c-directives-end in [211]); "---#" is not a marker and a document after directives needs one. Example: "%TAG !e! tag:x:\n---# c\n"
+block-header-space	granit-rejects	[|>] +[-+1-9][ \t]*\n	Block scalar indicators must follow | or > directly (YAML 1.2 [162]); "| -" is invalid and rapidyaml accepts it. Example: "| -\n  x\n"
+quoted-key-multiline	granit-rejects	"[^"\n]*\\\n[^"\n]*" *:	An implicit key must be on one line (YAML 1.2 [154]/[155]); a double-quoted key continued with an escaped line break is rejected by granit and accepted by rapidyaml. Example: "[\"a\\\n  b\": c]\n"
+stream-truncation	truncation	^	Accepted by ruling 2026-11-14 (keep granit). Both backends fail the final stream document with a syntax error; yaml::stream calls it TRUNCATED when the parser places the error on the last line. rapidyaml places many non-EOF errors there (236B: missing colon) and some EOF errors earlier (9MAG); the Rust adapter places exactly the errors caused by the input ending (granit EOF kinds) at the end, so its TRUNCATED means the input ended inside the document. Matching rapidyaml would mean emulating its error positions. Example: 236B
+block-scalar-at-eof	document	[|>][-+1-9]*[ \t]*\n[\s\S]*[^\n]$	A clip or keep block scalar whose last content line ends the input without a line break has no final break (YAML 1.2.2 [165], b-chomped-last: b-as-line-feed | end-of-input); the Rust adapter follows the spec (it removes the break granit-parser 2.1.0 adds) and rapidyaml 0.16.0 adds one for a top-level block scalar. Example: "|\n  a" (no final newline) is "a"
