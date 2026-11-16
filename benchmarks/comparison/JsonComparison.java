@@ -367,7 +367,7 @@ public final class JsonComparison {
   private static final class StructuralReads extends RootNode {
     private final String name;
     StructuralReads(String name) { super(ComparisonLanguage.current()); this.name = name; }
-    @Override public String getName() { return "StructuralReads[" + name + "]"; }
+    @Override @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary public String getName() { return "StructuralReads[" + name + "]"; }
     @Override public Object execute(VirtualFrame frame) {
       return read((Object[]) frame.getArguments()[0], (Integer) frame.getArguments()[1]);
     }
@@ -527,6 +527,8 @@ public final class JsonComparison {
     private final @Nullable Competitor competitor;
     @Child private JsonFixture.NumericInteropReader reader = new JsonFixture.NumericInteropReader();
 
+    // A constructor is not partially evaluated (trufflecheck counts every Node method as compiled).
+    @SuppressWarnings("TruffleMissingBoundary")
     NumericReads(String engine, int mode, @Nullable JsonSession session) {
       super(ComparisonLanguage.current());
       this.name = "NumericReads[" + engine + "]";
@@ -740,6 +742,8 @@ public final class JsonComparison {
     @Child private JsonFixture.InteropReader reader = new JsonFixture.InteropReader();
     @Child private TapeExportNode export = TapeExportNode.create();
 
+    // A constructor is not partially evaluated (trufflecheck counts every Node method as compiled).
+    @SuppressWarnings("TruffleMissingBoundary")
     GenericReads(String engine, int mode, @Nullable JsonSession session) {
       super(ComparisonLanguage.current());
       this.name = "GenericReads[" + engine + "]";

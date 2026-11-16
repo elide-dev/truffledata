@@ -64,6 +64,10 @@ public final class CsvFormat {
     }
 
     /** Built after the enum is initialized (a switch over the enum needs its values). */
+    // ORACLE's record separator is System.lineSeparator(), as in Commons CSV. Under build-time
+    // initialization the build host's is sealed, which is the target OS's: native-image builds for the
+    // platform it runs on.
+    @SuppressWarnings("TruffleHostValueInImageHeap")
     private static final class Formats {
       static final CsvFormat[] ALL = new CsvFormat[values().length];
 

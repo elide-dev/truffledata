@@ -34,8 +34,14 @@ public abstract class TapeSession<M extends TapeOwner> implements AutoCloseable 
   /** {@link Backend#decode} input encodings; each backend maps them to its native flags. */
   public static final int UTF8 = 0, UTF16 = 1, LATIN1 = 2;
 
-  // Native stream statuses shared by td_json_stream_next and td_yaml_stream_next.
-  static final int STREAM_EMPTY = 8, STREAM_TRUNCATED = 9;
+  /**
+   * Native stream statuses shared by td_json_stream_next and td_yaml_stream_next: no complete
+   * document buffered, and the finished input ended inside one. Each format's seam declares them
+   * (json.seam {@code Status.stream_empty}/{@code stream_truncated}); this format-neutral layer
+   * cannot depend on one format's generated constants, so each format's tests check that its
+   * seam's values equal these.
+   */
+  public static final int STREAM_EMPTY = 8, STREAM_TRUNCATED = 9;
 
   /**
    * One runtime's native session calls (static {@code @CFunction} bindings on SVM, FFM bindings on

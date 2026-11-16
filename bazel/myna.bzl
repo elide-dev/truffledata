@@ -54,6 +54,10 @@ def myna_bindings(name, seam, java_class, java_package, out = "generated", abi =
         java_class + ".java",
         java_class + "FFM.java",
         java_class + "ForeignFeature.java",
+        # The Native Image class's @CContext: seam.h embedded for the image build's header check.
+        java_class + "Directives.java",
+        # Every truffledata seam names `abi=`, so Myna always emits its ABI_VERSION here.
+        java_class + "Constants.java",
         "seam.rs",
         "seam.h",
         "seam.json",

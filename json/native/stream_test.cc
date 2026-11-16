@@ -106,7 +106,7 @@ const JsonLimitsStruct limits{1 << 20, 1 << 20, 100000, 1 << 20, 128, 0};
 
 
 std::vector<uint64_t> expected_digests(const corpus& c, const JsonLimitsStruct& with = limits) {
-  void* s = td_json_session_create(&with);
+  JsonSession* s = td_json_session_create(&with);
   std::vector<uint64_t> out;
   for (const auto& doc : c.documents) {
     JsonResult r{};
@@ -118,7 +118,7 @@ std::vector<uint64_t> expected_digests(const corpus& c, const JsonLimitsStruct& 
 }
 
 // Feeds `input` in chunks of `chunk` bytes, draining after every feed, and returns the digests.
-std::vector<uint64_t> run_stream(void* stream, const std::string& input, size_t chunk, int32_t* final_status = nullptr) {
+std::vector<uint64_t> run_stream(JsonStream* stream, const std::string& input, size_t chunk, int32_t* final_status = nullptr) {
   std::vector<uint64_t> out;
   JsonResult r{};
   size_t at = 0;
@@ -157,8 +157,8 @@ void stream_boundary_exactness() {
   for (auto [max_document, batch] : shapes) {
     for (size_t chunk : {size_t(1), size_t(7), size_t(64), size_t(4096), size_t(1000000)}) {
       if (chunk == 1 && max_document != 512) continue;  // one byte at a time once is enough
-      void* s = td_json_session_create(&limits);
-      void* stream = td_json_stream_create(s, max_document, batch);
+      JsonSession* s = td_json_session_create(&limits);
+      JsonStream* stream = td_json_stream_create(s, max_document, batch);
       REQUIRE(stream != nullptr);
       std::vector<uint64_t> got = run_stream(stream, c.bytes, chunk);
       REQUIRE(got.size() == expected.size());
@@ -172,8 +172,8 @@ void stream_boundary_exactness() {
 }
 
 struct harness {
-  void* session;
-  void* stream;
+  JsonSession* session;
+  JsonStream* stream;
   JsonResult result{};
   explicit harness(uint64_t max_document = 1 << 20, uint64_t batch = 1 << 20) {
     session = td_json_session_create(&limits);
@@ -213,7 +213,7 @@ void directory_modes() {
   harness h;
   REQUIRE(h.feed(batch) == batch.size());
   td_json_stream_finish(h.stream);
-  void* expected_session = td_json_session_create(&limits);
+  JsonSession* expected_session = td_json_session_create(&limits);
   for (int i = 0; i < 200; ++i) {
     JsonResult invalid{};
     REQUIRE(td_json_stream_next(h.stream, TD_JSON_WANT_TEXT, &invalid) == TD_JSON_ARGUMENT);
@@ -379,8 +379,8 @@ void errors_and_skip() {
     REQUIRE(td_json_stream_skip(h.stream) == TD_JSON_ARGUMENT);
     JsonLimitsStruct deep = limits;
     deep.max_depth = 2;
-    void* s = td_json_session_create(&deep);
-    void* stream = td_json_stream_create(s, 64, 64);
+    JsonSession* s = td_json_session_create(&deep);
+    JsonStream* stream = td_json_stream_create(s, 64, 64);
     td_json_stream_feed(stream, reinterpret_cast<const uint8_t*>("[[[1]]] [[1]]"), 13);
     td_json_stream_finish(stream);
     JsonResult r{};
@@ -392,12 +392,12 @@ void errors_and_skip() {
   }
   {
     // Options and arguments.
-    void* s = td_json_session_create(&limits);
+    JsonSession* s = td_json_session_create(&limits);
     REQUIRE(td_json_stream_create(s, 0, 64) == nullptr);
     REQUIRE(td_json_stream_create(s, 128, 64) == nullptr);
     REQUIRE(td_json_stream_create(s, uint64_t(1) << 31, uint64_t(1) << 31) == nullptr);
     REQUIRE(td_json_stream_create(nullptr, 64, 64) == nullptr);
-    void* stream = td_json_stream_create(s, 64, 64);
+    JsonStream* stream = td_json_stream_create(s, 64, 64);
     JsonResult misaligned[2]{};
     REQUIRE(td_json_stream_next(stream, 0, reinterpret_cast<uint8_t*>(misaligned) + 1) == TD_JSON_ARGUMENT);
     REQUIRE(td_json_stream_next(nullptr, 0, misaligned) == TD_JSON_ARGUMENT);

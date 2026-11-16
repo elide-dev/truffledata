@@ -20,6 +20,10 @@ public enum TargetAbi {
   LP64_LITTLE_AAPCS64(true, "LP64, little-endian, unsigned char");
 
   /** The class of the running JVM's host, decided once from {@code os.name} and {@code os.arch}. */
+  // Read on the JVM (FFM) paths only; images select their class with Platform. Under build-time
+  // initialization the build host's value is sealed, which is the target's: native-image builds for
+  // the platform it runs on.
+  @SuppressWarnings("TruffleHostValueInImageHeap")
   public static final TargetAbi HOST =
       of(System.getProperty("os.name"), System.getProperty("os.arch"));
 

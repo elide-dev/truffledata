@@ -18,13 +18,25 @@ mod typed;
 mod unicode;
 use unicode::td_buffa_utf8_to_utf16;
 
-const MALFORMED: i32 = 1;
-const BUDGET: i32 = 2;
-const ALLOCATION: i32 = 3;
-const PANIC: i32 = 4;
-// Status 5 is reserved. The slab did not fit: `SlabResult.bytes` is exact.
+// Statuses are seam `Status` values (buffa.seam); the decoders carry the raw code internally and
+// the entry points return the newtype. Status 5 is reserved.
+use seam::Status;
+const MALFORMED: i32 = Status::MALFORMED.0;
+const BUDGET: i32 = Status::BUDGET.0;
+const ALLOCATION: i32 = Status::ALLOCATION.0;
+const PANIC: i32 = Status::PANIC.0;
+// The slab did not fit: `SlabResult.bytes` is exact.
 const NEEDS_CAPACITY: i32 = slab::NEEDS_CAPACITY;
 use seam::Field;
+// A decode index stores the protobuf wire type in Field.wire; the seam's WireType names the codes.
+const _: () = {
+    assert!(WireType::Varint as u32 == seam::WireType::VARINT.0);
+    assert!(WireType::Fixed64 as u32 == seam::WireType::FIXED64.0);
+    assert!(WireType::LengthDelimited as u32 == seam::WireType::LENGTH_DELIMITED.0);
+    assert!(WireType::StartGroup as u32 == seam::WireType::START_GROUP.0);
+    assert!(WireType::EndGroup as u32 == seam::WireType::END_GROUP.0);
+    assert!(WireType::Fixed32 as u32 == seam::WireType::FIXED32.0);
+};
 const FIELD_BYTES: usize = mem::size_of::<Field>();
 
 // Both native memory and input regions are bounded by i32::MAX at the ABI. Keep
@@ -125,7 +137,7 @@ impl<'a> Parser<'a> {
     }
 }
 fn parse(input: &[u8], cells: u64, depth: u32, native_bytes: u64) -> Result<Vec<Field>, i32> {
-    if depth == 0 || depth > 128 || native_bytes > i32::MAX as u64 {
+    if depth == 0 || depth > seam::MAX_DEPTH || native_bytes > i32::MAX as u64 {
         return Err(BUDGET);
     }
     let mut parser = Parser {
@@ -155,12 +167,11 @@ pub unsafe extern "C" fn td_buffa_decode(
     max_cells: u64,
     max_depth: u32,
     max_native_bytes: u64,
-    result: *mut std::ffi::c_void,
-) -> i32 {
+    result: *mut seam::Result,
+) -> Status {
     if result.is_null() {
-        return MALFORMED;
+        return Status::MALFORMED;
     }
-    let result = result.cast::<seam::Result>();
     unsafe {
         result.write(seam::Result {
             data: std::ptr::null_mut(),
@@ -169,7 +180,7 @@ pub unsafe extern "C" fn td_buffa_decode(
         });
     }
     if data.is_null() || length > i32::MAX as u64 {
-        return MALFORMED;
+        return Status::MALFORMED;
     }
     match catch_unwind(AssertUnwindSafe(|| {
         let input = unsafe { slice::from_raw_parts(data, length as usize) };
@@ -178,16 +189,16 @@ pub unsafe extern "C" fn td_buffa_decode(
         Ok(Ok(mut fields)) => {
             unsafe {
                 result.write(seam::Result {
-                    data: fields.as_mut_ptr().cast(),
+                    data: fields.as_mut_ptr(),
                     count: fields.len() as u64,
                     capacity: fields.capacity() as u64,
                 });
             }
             mem::forget(fields);
-            0
+            Status::OK
         }
-        Ok(Err(code)) => code,
-        Err(_) => PANIC,
+        Ok(Err(code)) => Status(code),
+        Err(_) => Status::PANIC,
     }
 }
 
@@ -199,23 +210,23 @@ pub unsafe extern "C" fn td_buffa_typed(
     schema_length: u64,
     data: *const u8,
     length: u64,
-    format: u32,
+    format: seam::Format,
     payload: *mut u8,
     payload_length: u64,
     max_cells: u64,
     max_string_bytes: u64,
     max_depth: u32,
     max_native_bytes: u64,
-    result: *mut std::ffi::c_void,
-) -> i32 {
-    unsafe {
+    result: *mut seam::Result,
+) -> Status {
+    Status(unsafe {
         typed_impl(
             false,
             schema,
             schema_length,
             data,
             length,
-            format,
+            format.0,
             payload,
             payload_length,
             max_cells,
@@ -224,7 +235,7 @@ pub unsafe extern "C" fn td_buffa_typed(
             max_native_bytes,
             result,
         )
-    }
+    })
 }
 
 /// # Safety
@@ -236,23 +247,23 @@ pub unsafe extern "C" fn td_buffa_typed_reuse(
     schema_length: u64,
     data: *const u8,
     length: u64,
-    format: u32,
+    format: seam::Format,
     payload: *mut u8,
     payload_length: u64,
     max_cells: u64,
     max_string_bytes: u64,
     max_depth: u32,
     max_native_bytes: u64,
-    result: *mut std::ffi::c_void,
-) -> i32 {
-    unsafe {
+    result: *mut seam::Result,
+) -> Status {
+    Status(unsafe {
         typed_impl(
             true,
             schema,
             schema_length,
             data,
             length,
-            format,
+            format.0,
             payload,
             payload_length,
             max_cells,
@@ -261,7 +272,7 @@ pub unsafe extern "C" fn td_buffa_typed_reuse(
             max_native_bytes,
             result,
         )
-    }
+    })
 }
 
 unsafe fn typed_impl(
@@ -277,12 +288,11 @@ unsafe fn typed_impl(
     max_string_bytes: u64,
     max_depth: u32,
     max_native_bytes: u64,
-    result: *mut std::ffi::c_void,
+    result: *mut seam::Result,
 ) -> i32 {
     if result.is_null() {
         return MALFORMED;
     }
-    let result = result.cast::<seam::Result>();
     let fields = if reuse {
         let previous = unsafe { &*result };
         if previous.capacity == 0 {
@@ -291,7 +301,7 @@ unsafe fn typed_impl(
             // Result provenance and exclusive ownership are part of this unsafe ABI contract.
             unsafe {
                 Vec::from_raw_parts(
-                    previous.data.cast::<Field>(),
+                    previous.data,
                     previous.count as usize,
                     previous.capacity as usize,
                 )
@@ -349,15 +359,15 @@ unsafe fn typed_impl(
 /// result is a live, aligned result of td_buffa_decode, released exactly once.
 /// Its fields must not have been modified. Zero/error results may also be released.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn td_buffa_release(result: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn td_buffa_release(result: *mut seam::Result) {
     if result.is_null() {
         return;
     }
-    let result = unsafe { &mut *result.cast::<seam::Result>() };
+    let result = unsafe { &mut *result };
     if result.capacity != 0 {
         unsafe {
             drop(Vec::from_raw_parts(
-                result.data.cast::<Field>(),
+                result.data,
                 result.count as usize,
                 result.capacity as usize,
             ));
@@ -378,21 +388,20 @@ pub unsafe extern "C" fn td_buffa_release(result: *mut std::ffi::c_void) {
 pub unsafe extern "C" fn td_buffa_compile_layout(
     schema: *const u8,
     schema_length: u64,
-    result: *mut std::ffi::c_void,
-) -> i32 {
+    result: *mut seam::LayoutResult,
+) -> Status {
     if result.is_null() {
-        return MALFORMED;
+        return Status::MALFORMED;
     }
-    let result = result.cast::<seam::Result>();
     unsafe {
-        result.write(seam::Result {
+        result.write(seam::LayoutResult {
             data: std::ptr::null_mut(),
             count: 0,
             capacity: 0,
         });
     }
     if schema.is_null() || schema_length > i32::MAX as u64 {
-        return MALFORMED;
+        return Status::MALFORMED;
     }
     match catch_unwind(AssertUnwindSafe(|| {
         let compiled =
@@ -406,16 +415,16 @@ pub unsafe extern "C" fn td_buffa_compile_layout(
     })) {
         Ok(Ok((handle, types))) => {
             unsafe {
-                result.write(seam::Result {
+                result.write(seam::LayoutResult {
                     data: handle.cast(),
                     count: types as u64,
                     capacity: 0,
                 });
             }
-            0
+            Status::OK
         }
-        Ok(Err(code)) => code,
-        Err(_) => PANIC,
+        Ok(Err(code)) => Status(code),
+        Err(_) => Status::PANIC,
     }
 }
 
@@ -423,7 +432,7 @@ pub unsafe extern "C" fn td_buffa_compile_layout(
 /// compiled is null or a handle from td_buffa_compile_layout, released exactly once, with no
 /// concurrent or later use.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn td_buffa_release_layout(compiled: *mut u8) {
+pub unsafe extern "C" fn td_buffa_release_layout(compiled: *mut seam::Layout) {
     if !compiled.is_null() {
         drop(unsafe {
             Box::from_raw(std::ptr::slice_from_raw_parts_mut(
@@ -438,7 +447,7 @@ pub unsafe extern "C" fn td_buffa_release_layout(compiled: *mut u8) {
 #[allow(clippy::too_many_arguments)]
 unsafe fn decode_slab_impl(
     small: bool,
-    compiled: *const u8,
+    compiled: *const seam::Layout,
     data: *const u8,
     length: u64,
     flags: u32,
@@ -447,18 +456,17 @@ unsafe fn decode_slab_impl(
     capacity: u64,
     max_depth: u32,
     max_slab_bytes: u64,
-    result: *mut std::ffi::c_void,
+    result: *mut seam::SlabResult,
 ) -> i32 {
     if result.is_null() {
         return MALFORMED;
     }
-    let result = result.cast::<seam::SlabResult>();
     unsafe {
         result.write(seam::SlabResult {
             bytes: 0,
             records: 0,
             handles: 0,
-            flags: 0,
+            flags: seam::SlabFlags::NONE,
             error: 0,
             cells: u32::MAX,
             string_bytes: u32::MAX,
@@ -500,7 +508,7 @@ unsafe fn decode_slab_impl(
             bytes: o.bytes,
             records: o.records,
             handles: o.handles,
-            flags: o.flags,
+            flags: seam::SlabFlags(o.flags),
             error: error as u32,
             cells: o.cells,
             string_bytes: o.string_bytes,
@@ -540,24 +548,24 @@ unsafe fn decode_slab_impl(
 /// from output. Borrowed slabs retain input offsets, never raw input addresses. No callback.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn td_buffa_decode_slab(
-    compiled: *const u8,
+    compiled: *const seam::Layout,
     data: *const u8,
     length: u64,
-    flags: u32,
+    flags: seam::DecodeFlags,
     projection: *const u8,
     out: *mut u8,
     capacity: u64,
     max_depth: u32,
     max_slab_bytes: u64,
-    result: *mut std::ffi::c_void,
-) -> i32 {
-    unsafe {
+    result: *mut seam::SlabResult,
+) -> Status {
+    Status(unsafe {
         decode_slab_impl(
             false,
             compiled,
             data,
             length,
-            flags,
+            flags.0,
             projection,
             out,
             capacity,
@@ -565,7 +573,7 @@ pub unsafe extern "C" fn td_buffa_decode_slab(
             max_slab_bytes,
             result,
         )
-    }
+    })
 }
 
 /// ABI 12 bounded leaf: td_buffa_decode_slab for `length` and `capacity` at most 64 KiB (else
@@ -577,24 +585,24 @@ pub unsafe extern "C" fn td_buffa_decode_slab(
 /// As td_buffa_decode_slab.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn td_buffa_decode_slab_small(
-    compiled: *const u8,
+    compiled: *const seam::Layout,
     data: *const u8,
     length: u64,
-    flags: u32,
+    flags: seam::DecodeFlags,
     projection: *const u8,
     out: *mut u8,
     capacity: u64,
     max_depth: u32,
     max_slab_bytes: u64,
-    result: *mut std::ffi::c_void,
-) -> i32 {
-    unsafe {
+    result: *mut seam::SlabResult,
+) -> Status {
+    Status(unsafe {
         decode_slab_impl(
             true,
             compiled,
             data,
             length,
-            flags,
+            flags.0,
             projection,
             out,
             capacity,
@@ -602,7 +610,7 @@ pub unsafe extern "C" fn td_buffa_decode_slab_small(
             max_slab_bytes,
             result,
         )
-    }
+    })
 }
 seam::assert_implementations!(seam);
 
@@ -672,15 +680,15 @@ mod tests {
             count: 0,
             capacity: 0,
         };
-        let p = (&mut out as *mut seam::Result).cast();
+        let p = &mut out as *mut seam::Result;
         unsafe {
-            assert_eq!(td_buffa_decode([8, 42].as_ptr(), 2, 4, 1, 32, p), 0);
+            assert_eq!(td_buffa_decode([8, 42].as_ptr(), 2, 4, 1, 32, p), Status::OK);
             assert_eq!(out.count, 1);
-            assert_eq!((*out.data.cast::<Field>()).value, 42);
+            assert_eq!((*p).data()[0].value, 42);
             td_buffa_release(p);
             assert_eq!(out.capacity, 0);
             td_buffa_release(p);
-            assert_eq!(td_buffa_decode([0].as_ptr(), 1, 4, 1, 32, p), MALFORMED);
+            assert_eq!(td_buffa_decode([0].as_ptr(), 1, 4, 1, 32, p), Status::MALFORMED);
             assert!(out.data.is_null());
         }
     }

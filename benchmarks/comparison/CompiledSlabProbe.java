@@ -262,7 +262,7 @@ public final class CompiledSlabProbe {
     void link(TypeRoot[] roots) {
       for (int i = 0; i < fields.length; i++)
         if (fields[i].kind().message())
-          children[i] = DirectCallNode.create(roots[layout.childType(type, i)].getCallTarget());
+          children[i] = insert(DirectCallNode.create(roots[layout.childType(type, i)].getCallTarget()));
     }
 
     @Override

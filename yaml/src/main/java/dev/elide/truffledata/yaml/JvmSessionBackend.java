@@ -4,11 +4,15 @@ import dev.elide.truffledata.tape.SegmentTape;
 import dev.elide.truffledata.tape.TapeBorrow;
 import dev.elide.truffledata.tape.TapeTextArena;
 import dev.elide.truffledata.tape.TypedLayout;
+import dev.elide.truffledata.yaml.generated.YamlConstants;
+import dev.elide.truffledata.yaml.generated.YamlConstants.DecodeFlags;
+import dev.elide.truffledata.yaml.generated.YamlConstants.Status;
 import dev.elide.truffledata.yaml.generated.YamlFFM;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 final class JvmSessionBackend extends YamlSession.Backend {
@@ -62,29 +66,39 @@ final class JvmSessionBackend extends YamlSession.Backend {
     return staging;
   }
 
+  /** Fills an options record (complex_keys stays reject, as YamlOptions has no pairs). */
   static void writeOptions(MemorySegment o, YamlOptions options) {
     YamlLimits l = options.limits();
-    long[] budgets = {
-      l.maxInputBytes(),
-      l.maxIndexBytes(),
-      l.maxNodes(),
-      l.maxTextBytes(),
-      l.maxAliases(),
-      l.maxAliasExpansion()
-    };
-    for (int i = 0; i < budgets.length; i++) o.set(ValueLayout.JAVA_LONG, 8L * i, budgets[i]);
-    int[] policies = {
-      l.maxDepth(),
-      options.schema().ordinal(),
-      options.duplicateKeys().ordinal(),
-      options.mergeKeys() ? 1 : 0,
-      options.aliases().ordinal(),
-      options.unknownTags().ordinal(),
-      options.versionDirective().ordinal(),
-      0
-    };
-    for (int i = 0; i < policies.length; i++)
-      o.set(ValueLayout.JAVA_INT, 48L + 4L * i, policies[i]);
+    o.set(ValueLayout.JAVA_LONG, YamlFFM.YamlOptionsStruct_max_input_bytes_OFFSET, l.maxInputBytes());
+    o.set(ValueLayout.JAVA_LONG, YamlFFM.YamlOptionsStruct_max_index_bytes_OFFSET, l.maxIndexBytes());
+    o.set(ValueLayout.JAVA_LONG, YamlFFM.YamlOptionsStruct_max_nodes_OFFSET, l.maxNodes());
+    o.set(ValueLayout.JAVA_LONG, YamlFFM.YamlOptionsStruct_max_text_bytes_OFFSET, l.maxTextBytes());
+    o.set(ValueLayout.JAVA_LONG, YamlFFM.YamlOptionsStruct_max_aliases_OFFSET, l.maxAliases());
+    o.set(
+        ValueLayout.JAVA_LONG,
+        YamlFFM.YamlOptionsStruct_max_alias_expansion_OFFSET,
+        l.maxAliasExpansion());
+    o.set(ValueLayout.JAVA_INT, YamlFFM.YamlOptionsStruct_max_depth_OFFSET, l.maxDepth());
+    o.set(ValueLayout.JAVA_INT, YamlFFM.YamlOptionsStruct_schema_OFFSET, options.schema().code);
+    o.set(
+        ValueLayout.JAVA_INT,
+        YamlFFM.YamlOptionsStruct_duplicate_keys_OFFSET,
+        options.duplicateKeys().code);
+    o.set(
+        ValueLayout.JAVA_INT, YamlFFM.YamlOptionsStruct_merge_keys_OFFSET, options.mergeKeys() ? 1 : 0);
+    o.set(ValueLayout.JAVA_INT, YamlFFM.YamlOptionsStruct_aliases_OFFSET, options.aliases().code);
+    o.set(
+        ValueLayout.JAVA_INT,
+        YamlFFM.YamlOptionsStruct_unknown_tags_OFFSET,
+        options.unknownTags().code);
+    o.set(
+        ValueLayout.JAVA_INT,
+        YamlFFM.YamlOptionsStruct_version_directive_OFFSET,
+        options.versionDirective().code);
+    o.set(
+        ValueLayout.JAVA_INT,
+        YamlFFM.YamlOptionsStruct_complex_keys_OFFSET,
+        YamlConstants.ComplexKeys.REJECT);
   }
 
   void reference() {
@@ -123,7 +137,8 @@ final class JvmSessionBackend extends YamlSession.Backend {
 
   /** The flags every decode of this backend passes: the same expression as its own calls. */
   int decodeFlags() {
-    return (options.retainSource() ? 2 : 0) | (directories ? 4 : 0);
+    return (options.retainSource() ? DecodeFlags.RETAIN_SOURCE : 0)
+        | (directories ? DecodeFlags.WANT_DIRECTORIES : 0);
   }
 
   @Override
@@ -148,7 +163,7 @@ final class JvmSessionBackend extends YamlSession.Backend {
               session,
               data,
               length,
-              (options.retainSource() ? 2 : 0) | (directories ? 4 : 0),
+              decodeFlags(),
               MemorySegment.NULL,
               0L,
               result);
@@ -159,19 +174,23 @@ final class JvmSessionBackend extends YamlSession.Backend {
   }
 
   static void check(int status, MemorySegment result) {
-    if (status == 2 || status == 4 || status == 6 || status == 7) {
-      int length = result.get(ValueLayout.JAVA_INT, 184);
-      String detail =
-          new String(
-              result.asSlice(192, Math.min(255, length)).toArray(ValueLayout.JAVA_BYTE),
-              StandardCharsets.UTF_8);
+    if (YamlStatus.detailed(status))
       YamlStatus.checkDetailed(
           status,
-          detail,
-          result.get(ValueLayout.JAVA_LONG, 168),
-          result.get(ValueLayout.JAVA_LONG, 176));
-    }
+          message(
+              result,
+              YamlFFM.YamlResult_error_message_OFFSET,
+              result.get(ValueLayout.JAVA_INT, YamlFFM.YamlResult_error_message_length_OFFSET)),
+          result.get(ValueLayout.JAVA_LONG, YamlFFM.YamlResult_error_line_OFFSET),
+          result.get(ValueLayout.JAVA_LONG, YamlFFM.YamlResult_error_column_OFFSET));
     YamlStatus.checkStatus(status);
+  }
+
+  /** The NUL-terminated error message of a failed result, at most capacity - 1 bytes. */
+  static String message(MemorySegment result, long offset, int published) {
+    int length = Math.min(YamlConstants.ERROR_MESSAGE_CAPACITY - 1, published);
+    return new String(
+        result.asSlice(offset, length).toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
   }
 
   @Override
@@ -179,31 +198,73 @@ final class JvmSessionBackend extends YamlSession.Backend {
     return null;
   }
 
-  static final ResultMetadata.Memory MEMORY =
-      new ResultMetadata.Memory() {
-        private MemorySegment at(long base, long offset, long size) {
-          return MemorySegment.ofAddress(base + offset).reinterpret(size);
-        }
+  /**
+   * Copies a live result's metadata through the generated counted views, which bound every table
+   * and string read by its count. {@code r} is a result record segment of the record's size.
+   */
+  static YamlMetadata metadata(MemorySegment r, long nodeCount, long expansionBudget) {
+    int[] words =
+        r.get(ValueLayout.ADDRESS, YamlFFM.YamlResult_yaml_meta_OFFSET)
+            .reinterpret(Math.multiplyExact(Integer.BYTES, Math.toIntExact(nodeCount)))
+            .toArray(ValueLayout.JAVA_INT);
+    MemorySegment strings = YamlFFM.YamlResult_strings(r);
+    MemorySegment tagTable = YamlFFM.YamlResult_tags(r);
+    String[] tags = ResultMetadata.texts(Math.toIntExact(YamlFFM.YamlResult_tags_count(r)));
+    for (int i = 0; i < tags.length; i++) {
+      MemorySegment tag = YamlFFM.YamlResult_tags_at(tagTable, i);
+      tags[i] =
+          text(
+              strings,
+              tag.get(ValueLayout.JAVA_INT, YamlFFM.YamlSpan_offset_OFFSET),
+              tag.get(ValueLayout.JAVA_INT, YamlFFM.YamlSpan_length_OFFSET));
+    }
+    MemorySegment anchorTable = YamlFFM.YamlResult_anchors(r);
+    int anchorCount = Math.toIntExact(YamlFFM.YamlResult_anchors_count(r));
+    long[] anchors = ResultMetadata.anchors(anchorCount);
+    String[] names = ResultMetadata.texts(anchorCount);
+    for (int i = 0; i < anchorCount; i++) {
+      MemorySegment anchor = YamlFFM.YamlResult_anchors_at(anchorTable, i);
+      anchors[i] = anchor.get(ValueLayout.JAVA_LONG, YamlFFM.YamlAnchor_node_OFFSET);
+      names[i] =
+          text(
+              strings,
+              anchor.get(ValueLayout.JAVA_INT, YamlFFM.YamlAnchor_offset_OFFSET),
+              anchor.get(ValueLayout.JAVA_INT, YamlFFM.YamlAnchor_length_OFFSET));
+    }
+    MemorySegment directiveTable = YamlFFM.YamlResult_directives(r);
+    int directiveCount = Math.toIntExact(YamlFFM.YamlResult_directives_count(r));
+    Map<String, String> directives = ResultMetadata.directives(directiveCount);
+    for (int i = 0; i < directiveCount; i++) {
+      MemorySegment directive = YamlFFM.YamlResult_directives_at(directiveTable, i);
+      directives.put(
+          text(
+              strings,
+              directive.get(ValueLayout.JAVA_INT, YamlFFM.YamlTagDirective_handle_offset_OFFSET),
+              directive.get(ValueLayout.JAVA_INT, YamlFFM.YamlTagDirective_handle_length_OFFSET)),
+          text(
+              strings,
+              directive.get(ValueLayout.JAVA_INT, YamlFFM.YamlTagDirective_prefix_offset_OFFSET),
+              directive.get(ValueLayout.JAVA_INT, YamlFFM.YamlTagDirective_prefix_length_OFFSET)));
+    }
+    return ResultMetadata.create(
+        words,
+        tags,
+        anchors,
+        names,
+        directives,
+        r.get(ValueLayout.JAVA_INT, YamlFFM.YamlResult_yaml_version_OFFSET),
+        expansionBudget);
+  }
 
-        public long pointer(long base, int offset) {
-          return word(base, offset);
-        }
-
-        public long word(long base, long offset) {
-          return at(base, offset, 8).get(ValueLayout.JAVA_LONG, 0);
-        }
-
-        public int integer(long base, long offset) {
-          return at(base, offset, 4).get(ValueLayout.JAVA_INT, 0);
-        }
-
-        public byte octet(long base, long offset) {
-          return at(base, offset, 1).get(ValueLayout.JAVA_BYTE, 0);
-        }
-      };
+  /** {@code length} bytes of the string table at the unsigned {@code offset}. */
+  private static String text(MemorySegment strings, int offset, int length) {
+    return new String(
+        strings.asSlice(Integer.toUnsignedLong(offset), length).toArray(ValueLayout.JAVA_BYTE),
+        StandardCharsets.UTF_8);
+  }
 
   static SegmentTape tape(MemorySegment r) {
-    return new SegmentTape(r.get(ValueLayout.ADDRESS, 8));
+    return new SegmentTape(r.get(ValueLayout.ADDRESS, YamlFFM.YamlResult_view_OFFSET));
   }
 
   static class Storage implements YamlMessage.Storage {
@@ -212,7 +273,7 @@ final class JvmSessionBackend extends YamlSession.Backend {
 
     Storage(SegmentTape tape, MemorySegment r) {
       this.tape = tape;
-      source = r.get(ValueLayout.ADDRESS, 144).reinterpret(r.get(ValueLayout.JAVA_LONG, 152));
+      source = YamlFFM.YamlResult_source(r);
     }
 
     public long span(long node) {
@@ -229,9 +290,7 @@ final class JvmSessionBackend extends YamlSession.Backend {
   @Override
   protected TapeBorrow borrow() {
     SegmentTape tape = tape(result);
-    YamlMetadata meta =
-        ResultMetadata.read(
-            MEMORY, result.address(), tape.nodeCount(), options.limits().maxAliasExpansion());
+    YamlMetadata meta = metadata(result, tape.nodeCount(), options.limits().maxAliasExpansion());
     return new TapeBorrow(tape, new Storage(tape, result), meta.format);
   }
 
@@ -249,9 +308,7 @@ final class JvmSessionBackend extends YamlSession.Backend {
       }
       check(status, owned);
       SegmentTape tape = tape(owned);
-      YamlMetadata meta =
-          ResultMetadata.read(
-              MEMORY, owned.address(), tape.nodeCount(), options.limits().maxAliasExpansion());
+      YamlMetadata meta = metadata(owned, tape.nodeCount(), options.limits().maxAliasExpansion());
       YamlMessage message =
           YamlMessage.create(
               tape,
@@ -357,8 +414,8 @@ final class JvmSessionBackend extends YamlSession.Backend {
   @Override
   protected int streamNext(long stream) {
     try {
-      int status = calls.stream_next(MemorySegment.ofAddress(stream), (options.retainSource() ? 2 : 0) | (directories ? 4 : 0), result);
-      if (status != 8 && status != 9) check(status, result);
+      int status = calls.stream_next(MemorySegment.ofAddress(stream), decodeFlags(), result);
+      if (status != Status.STREAM_EMPTY && status != Status.STREAM_TRUNCATED) check(status, result);
       return status;
     } catch (Throwable failure) {
       throw YamlJvm.callFailure(failure);

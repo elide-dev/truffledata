@@ -1,5 +1,6 @@
 package dev.elide.truffledata.buffa;
 
+import dev.elide.truffledata.buffa.generated.BuffaConstants;
 import dev.elide.truffledata.protobuf.CellsFixtures;
 import dev.elide.truffledata.protobuf.Projection;
 import dev.elide.truffledata.protobuf.ProtoPlan;
@@ -209,7 +210,8 @@ public final class CellsParity {
         var output = backend.allocate(size);
         var program =
             mask == null ? null : backend.allocate(mask.length).put(Objects.requireNonNull(mask))) {
-      int flags = projection == null ? 1 : projection.decodeFlags();
+      int flags =
+          projection == null ? BuffaConstants.DecodeFlags.OWNING : projection.decodeFlags();
       try {
         int written =
             backend.writeSlab(backend.prepareSlab(compiled), input, output, limits, flags, program);
@@ -248,7 +250,13 @@ public final class CellsParity {
           outcomes.add(outcome(() -> backend.slab(compiled, input, plan, limits, 1 << 12)));
           try {
             int written =
-                backend.writeSlab(backend.prepareSlab(compiled), input, output, limits, 1, null);
+                backend.writeSlab(
+                    backend.prepareSlab(compiled),
+                    input,
+                    output,
+                    limits,
+                    BuffaConstants.DecodeFlags.OWNING,
+                    null);
             outcomes.add("ok " + written);
           } catch (RuntimeException failure) {
             outcomes.add("error " + failure.getClass().getName() + ": " + failure.getMessage());

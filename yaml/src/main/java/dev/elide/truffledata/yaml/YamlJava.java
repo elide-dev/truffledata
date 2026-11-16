@@ -43,6 +43,8 @@ public final class YamlJava {
     return found;
   }
 
+  // Deliberate: in an image the lookup runs at build time and seals exactly the event source linked in.
+  @SuppressWarnings("TruffleHostValueInImageHeap")
   private static final class Sources {
     static final @org.jspecify.annotations.Nullable YamlEventSource SOURCE = find();
 

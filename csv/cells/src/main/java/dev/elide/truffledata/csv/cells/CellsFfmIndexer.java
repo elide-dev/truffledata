@@ -10,6 +10,7 @@ import dev.elide.truffledata.csv.kernel.cells.generated.CsvCellsJvmTruffle;
 import dev.elide.truffledata.csv.kernel.CsvIndex;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
 import dev.elide.truffledata.csv.kernel.generated.CsvNativeAbi;
+import dev.elide.truffledata.csv.kernel.generated.CsvNativeConstants;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -52,6 +53,9 @@ final class CellsFfmIndexer extends CsvIndexer implements AutoCloseable {
   static final int PROVIDER_CAPACITY = 1 << 16;
 
   /** The process's cells, created on first use (after {@link #bind}). */
+  // Deliberately shared (see the class comment): language-neutral cells under their own root that
+  // a call with these argument types never mutates; a HotSpot-only route.
+  @SuppressWarnings("TruffleStaticContextState")
   static final class Cells {
     static final CsvCellsJvmTruffle.index_Cell INDEX = adopt(new CsvCellsJvmTruffle.index_Cell());
     static final CsvCellsJvmTruffle.index_leaf_Cell LEAF =
@@ -94,7 +98,11 @@ final class CellsFfmIndexer extends CsvIndexer implements AutoCloseable {
     validate = Cells.VALIDATE;
     this.kernel = resolved;
     this.criticalBytes = criticalBytes;
-    format = (delimiter & 0xFF) | (quote & 0xFF) << 8 | (quoting ? 1 << 16 : 0);
+    format =
+        CsvNativeConstants.Format.withQuote(
+            CsvNativeConstants.Format.withDelimiter(
+                quoting ? CsvNativeConstants.Format.QUOTING : 0, delimiter),
+            quote);
     name = "native-" + CsvIndex.kernelName(resolved) + "-ffm-cells";
   }
 
@@ -161,15 +169,16 @@ final class CellsFfmIndexer extends CsvIndexer implements AutoCloseable {
       result =
           length <= criticalBytes ? leaf.executeLong(arguments) : index.executeLong(arguments);
       if (result > 0)
-        MemorySegment.copy(target, ValueLayout.JAVA_INT, 0, out, 0, (int) (result >>> 8));
+        MemorySegment.copy(target, ValueLayout.JAVA_INT, 0, out, 0,
+            (int) (result >>> CsvNativeConstants.INDEX_COUNT_SHIFT));
     } finally {
       // `out` is a raw address: the automatic arena must stay reachable across the call.
       Reference.reachabilityFence(source);
       Reference.reachabilityFence(target);
     }
     if (result < 0) throw new IllegalStateException("CSV native index failed: " + result);
-    carry = result & 0xFF;
-    return (int) (result >>> 8);
+    carry = result & ((1L << CsvNativeConstants.INDEX_COUNT_SHIFT) - 1);
+    return (int) (result >>> CsvNativeConstants.INDEX_COUNT_SHIFT);
   }
 
   /** simdutf through the cell, over a native copy (FfmIndexer's checks and result rule). */

@@ -24,7 +24,8 @@ import os
 import re
 import sys
 
-HEX64 = re.compile(r'\b[0-9a-f]{64}\b')
+# Not \b: since Myna's header check the fingerprint also ends an identifier (`<MODULE>_SEAM_ABI_<hex>`).
+HEX64 = re.compile(r'(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])')
 DEFINE = re.compile(r'^#define (\w+_SEAM_ABI) "([0-9a-f]{64})"$')
 TRIPLE = re.compile(r'^target triple = ".*"$', re.MULTILINE)
 

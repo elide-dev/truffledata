@@ -624,6 +624,8 @@ public final class ConsumerComparison {
     }
 
     @Override
+    // RuntimeException (ControlFlowException, guest exceptions) is rethrown by the catch before it.
+    @SuppressWarnings("TruffleGenericCatch")
     public Object execute(VirtualFrame frame) {
       var rows = (Object[]) frame.getArguments()[0];
       int rotation = (Integer) frame.getArguments()[1];
@@ -637,7 +639,8 @@ public final class ConsumerComparison {
       } catch (RuntimeException failure) {
         throw failure;
       } catch (Exception failure) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
+        // Fatal: leave without invalidating.
+        CompilerDirectives.transferToInterpreter();
         throw new IllegalStateException("Consumer access failed", failure);
       }
       return sum | compiled;

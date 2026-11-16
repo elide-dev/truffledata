@@ -215,7 +215,7 @@ public final class JitMatrix {
       Missing.INSTANCE,
       42L
     };
-    var object = new MatrixObject(Shape.newBuilder().layout(MatrixObject.class).build());
+    var object = new MatrixObject(Shape.newBuilder().layout(MatrixObject.class, java.lang.invoke.MethodHandles.lookup()).build());
     for (int i = 0; i < values.length; i++)
       if (values[i] != Missing.INSTANCE)
         DynamicObject.PutNode.getUncached().execute(object, schema.field(i).name(), values[i]);

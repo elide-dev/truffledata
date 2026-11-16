@@ -2,38 +2,43 @@
 #define TRUFFLEDATA_JSON_API_H
 #include "json/native/generated/seam.h"
 
-// ABI status codes. No C++ exception crosses the generated C boundary.
-enum td_json_status {
-  TD_JSON_OK = 0,
-  TD_JSON_ARGUMENT = 1,
-  TD_JSON_LIMIT = 2,
-  TD_JSON_ALLOCATION = 3,
-  TD_JSON_SYNTAX = 4,
-  TD_JSON_INTERNAL = 5,
-  TD_JSON_CONTRACT = 6,
-  TD_JSON_TEXT_TOO_SMALL = 7,
-  // Streams (Task F1); the same values as TD_YAML_STREAM_EMPTY/TD_YAML_STREAM_TRUNCATED.
-  TD_JSON_STREAM_EMPTY = 8,
-  TD_JSON_STREAM_TRUNCATED = 9
-};
+// The integer protocol (status codes, flags, limits and plan code tables) is declared once, in
+// json.seam, and generated into seam.h (TRUFFLEDATA_JSON_*) and JsonConstants. The TD_JSON_ names
+// below are aliases of the generated values, never second copies of a number.
 
-// session_decode flags.
+// ABI status codes (json.seam `enum Status`). No C++ exception crosses the generated C boundary.
+#define TD_JSON_OK TRUFFLEDATA_JSON_STATUS_OK
+#define TD_JSON_ARGUMENT TRUFFLEDATA_JSON_STATUS_ARGUMENT
+#define TD_JSON_LIMIT TRUFFLEDATA_JSON_STATUS_LIMIT
+#define TD_JSON_ALLOCATION TRUFFLEDATA_JSON_STATUS_ALLOCATION
+#define TD_JSON_SYNTAX TRUFFLEDATA_JSON_STATUS_SYNTAX
+#define TD_JSON_INTERNAL TRUFFLEDATA_JSON_STATUS_INTERNAL
+#define TD_JSON_CONTRACT TRUFFLEDATA_JSON_STATUS_CONTRACT
+#define TD_JSON_TEXT_TOO_SMALL TRUFFLEDATA_JSON_STATUS_TEXT_TOO_SMALL
+// Streams (Task F1); the same values as TD_YAML_STREAM_EMPTY/TD_YAML_STREAM_TRUNCATED.
+#define TD_JSON_STREAM_EMPTY TRUFFLEDATA_JSON_STATUS_STREAM_EMPTY
+#define TD_JSON_STREAM_TRUNCATED TRUFFLEDATA_JSON_STATUS_STREAM_TRUNCATED
+
+// session_decode flags (json.seam `flags DecodeFlags`).
 // TD_JSON_WANT_TEXT (Task D2): also write the document's text arena into text_out (see below).
-#define TD_JSON_WANT_TEXT 1u
+#define TD_JSON_WANT_TEXT TRUFFLEDATA_JSON_DECODE_FLAGS_WANT_TEXT
 // Retained/member-read paths request lookup directories; sink-only borrows omit them.
-#define TD_JSON_WANT_DIRECTORIES 32u
+#define TD_JSON_WANT_DIRECTORIES TRUFFLEDATA_JSON_DECODE_FLAGS_WANT_DIRECTORIES
 // TD_JSON_UTF16_INPUT (Task D3): `data` is UTF-16LE (`length` bytes, even; `data` 2-byte aligned),
 // validated and transcoded to UTF-8 natively; an unpaired surrogate is TD_JSON_SYNTAX. Limits,
 // lexical spans and copied_input_bytes refer to the UTF-8 form.
-#define TD_JSON_UTF16_INPUT 2u
+#define TD_JSON_UTF16_INPUT TRUFFLEDATA_JSON_DECODE_FLAGS_UTF16_INPUT
 // TD_JSON_LATIN1_INPUT (Task D3): `data` is ISO-8859-1, one code point per byte, transcoded to
 // UTF-8. Exclusive with TD_JSON_UTF16_INPUT.
-#define TD_JSON_LATIN1_INPUT 8u
+#define TD_JSON_LATIN1_INPUT TRUFFLEDATA_JSON_DECODE_FLAGS_LATIN1_INPUT
 // TD_JSON_VALIDATE_ONLY (tape-gbps Task 2): run the decode walk and every check (grammar, UTF-8,
 // numbers, duplicate keys after unescaping, limits) and keep nothing: on success result.view is
 // null, the session holds no document (retain is TD_JSON_ARGUMENT) and only the accounting fields
 // are set. Exclusive with TD_JSON_WANT_TEXT.
-#define TD_JSON_VALIDATE_ONLY 16u
+#define TD_JSON_VALIDATE_ONLY TRUFFLEDATA_JSON_DECODE_FLAGS_VALIDATE_ONLY
+
+// The largest max_depth (decode, decode_adopted, JsonLimitsStruct) accepted.
+#define TD_JSON_MAX_DEPTH TRUFFLEDATA_JSON_MAX_DEPTH
 
 // ABI 10: every decoded result publishes td_tape_view (TapeView in json.seam).
 // Spans and key flags are embedded in words; text_table has one entry per word,
@@ -73,7 +78,7 @@ enum td_json_status {
 // session_decode_small is session_decode restricted to length ≤ TD_JSON_CRITICAL_LIMIT
 // (TD_JSON_ARGUMENT above it), declared a native leaf for the JVM's bounded critical path:
 // bounded input (≈ 30 µs at 150 MB/s), no locks, no exception escapes.
-#define TD_JSON_CRITICAL_LIMIT 4096u
+#define TD_JSON_CRITICAL_LIMIT TRUFFLEDATA_JSON_CRITICAL_LIMIT
 
 // Streams (td_json_stream_*, Task F1; json/native/stream.h): whitespace-separated documents
 // (NDJSON, JSON Lines, concatenated JSON) decoded one at a time into a session, with the carry-over
@@ -99,16 +104,17 @@ enum td_json_status {
 // incomplete document). A UTF-8 BOM is accepted only at the start of the stream. Session results
 // can be retained with session_retain as usual.
 
-// Typed plans hold at most this many records (each at most 64 fields).
-#define TD_JSON_MAX_PLAN_RECORDS 65536u
+// Typed plans hold at most this many records (each at most TRUFFLEDATA_JSON_MAX_RECORD_FIELDS).
+#define TD_JSON_MAX_PLAN_RECORDS TRUFFLEDATA_JSON_MAX_PLAN_RECORDS
 // Maximum record nesting of a typed plan; the root record alone has depth 1.
-#define TD_JSON_MAX_PLAN_DEPTH 32u
+#define TD_JSON_MAX_PLAN_DEPTH TRUFFLEDATA_JSON_MAX_PLAN_DEPTH
 
-// Field kinds: 0 boolean, 1 int64, 2 uint64, 3 float64, 4 string, 5 record.
-// Length units: 0 unconstrained, 1 UTF-16 units, 2 Unicode scalar values.
-// Floating widths: 0/64 binary64; 32 requires an exactly representable binary32 value.
-// Field flags: bit 0 required, bit 1 nullable, bit 2 repeated; other bits must be zero.
-// JsonScalarField.child is the record ordinal for kind 5 and UINT32_MAX otherwise.
+// JsonScalarField code tables are json.seam enums and flag sets: kind (FieldKind: boolean, int64,
+// uint64, float64, string, record), length_unit (LengthUnit: unconstrained, UTF-16 units, Unicode
+// scalar values), float_bits (FloatWidth: unspecified and binary64 are binary64; binary32 requires
+// an exactly representable binary32 value) and flags (FieldFlags: required, nullable, repeated;
+// other bits must be zero). JsonScalarField.child is the record ordinal for FieldKind record and
+// TRUFFLEDATA_JSON_NO_CHILD (UINT32_MAX) otherwise.
 // plan_create takes JsonRecordPlan[record_count] (record 0 is the root) that
 // partition the field table in order: record i's fields_offset equals the sum
 // of the preceding field_counts, and the counts sum to field_count. Plans that
