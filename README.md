@@ -128,17 +128,21 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.28")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.13.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.13.1"))
     implementation("dev.elide:truffledata-core")
     implementation("dev.elide:truffledata-protobuf")
     // Add JDBC integrations or protobuf-buffa as needed.
 }
 ```
 
-[Release 0.13.0](https://github.com/elide-dev/truffledata/releases/tag/v0.13.0) includes
+[Release 0.13.1](https://github.com/elide-dev/truffledata/releases/tag/v0.13.1) includes
 source/Javadoc JARs, consumer POMs, Gradle metadata, signatures, checksums, and
 Buffa, JSON, YAML and CSV native attachments. See
 [publishing and consumption](docs/PUBLISHING.md) for Maven, Bazel and native linking.
+
+Release **0.13.1** is a fixes-only release: YAML (a rapidyaml undefined-behaviour fuzz finding, handler
+exceptions, keep-chomped scalars), CSV mapped rows, JDBC `BIT` columns and an unbalanced tape `end()`.
+See the [0.13.1 notes](docs/RELEASE_0_13_1.md).
 
 Release **0.13.0** adds experimental [Bebop](docs/BEBOP.md) support as `truffledata-bebop`:
 encoding and decoding in the 2026 indexed wire layout, a strict profile, a `bebopc` descriptor
@@ -184,56 +188,56 @@ these results do not establish an overall performance win.
 
 ## Performance
 
-Measured on the released **0.11.0** tree on one quiet host (AMD Ryzen Threadripper PRO
+Measured on the released **0.12.0** code (`c378d6d`) on one quiet host (AMD Ryzen Threadripper PRO
 9965WX), with every benchmark run in sequence on one pinned CPU. Native Image on Linux
 x86-64, O2, serial GC, no PGO, every cells flag off. Each bar is the median of fresh
 processes, and the whiskers show the full range across those processes.
 
-- **JSON:** compiled guest reads take **27.0 ns per document**, against 64.2 for Jackson and 90.4 for
-  fastjson2. Parse plus ten reads takes 764 ns: level with DSL-JSON, ahead of jsoniter, Jackson
-  and Gson, and **1.18× slower than fastjson2**. Number-heavy documents parse **2.16× faster than
+- **JSON:** compiled guest reads take **26.8 ns per document**, against 64.8 for Jackson and 90.7 for
+  fastjson2. Parse plus ten reads takes 757 ns: level with DSL-JSON, ahead of jsoniter, Jackson
+  and Gson, and **1.16× slower than fastjson2**. Number-heavy documents parse **2.15× faster than
   fastjson2** while allocating about a tenth of its Java heap.
-- **Protobuf:** slab decode + release takes **307 ns per message against protobuf-java's 615**, and
-  2.42× less time on a large message; reading every field as well takes 523 ns against 655. Compiled guest reads of
-  generated messages take 20.4 ns, less than half the 44.7 ns of direct protobuf-java getters. Interpreted
-  reads remain **3.67× slower** than those getters, though 8× faster than protobuf-java
+- **Protobuf:** slab decode + release takes **311 ns per message against protobuf-java's 623**, and
+  2.38× less time on a large message; reading every field as well takes 532 ns against 669. Compiled guest reads of
+  generated messages take 20.8 ns, less than half the 44.6 ns of direct protobuf-java getters. Interpreted
+  reads remain **3.71× slower** than those getters, though 8× faster than protobuf-java
   objects exposed through interop.
-- **CSV:** the retained typed batch reads mixed CSV at **0.74 GB/s, 3.3× FastCSV** (0.66 GB/s, 3.0×,
+- **CSV:** the retained typed batch reads mixed CSV at **0.73 GB/s, 3.2× FastCSV** (0.66 GB/s, 3.0×,
   at 128 MiB), and the index scan without retention reaches 1.14 GB/s. With every field as a String, the
-  owned batch leads FastCSV at 1 MiB (0.50 against 0.41 GB/s) but is level at 128 MiB, where the
-  copied batch is **0.91× FastCSV**.
+  owned batch leads FastCSV at 1 MiB (0.49 against 0.41 GB/s) and is about level at 128 MiB (0.40
+  against 0.39), where the copied batch is **0.92× FastCSV**.
 - **YAML** has no other library in the native image; its card compares TruffleData's APIs.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/bench-0.11.0/json-dark.svg">
-  <img alt="JSON on Native Image: TruffleData against fastjson2, DSL-JSON, jsoniter, Jackson and Gson" src="docs/images/bench-0.11.0/json-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/bench-0.12.0/json-dark.svg">
+  <img alt="JSON on Native Image: TruffleData against fastjson2, DSL-JSON, jsoniter, Jackson and Gson" src="docs/images/bench-0.12.0/json-light.svg">
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/bench-0.11.0/protobuf-dark.svg">
-  <img alt="Protobuf on Native Image: TruffleData generated messages, slab and session against protobuf-java" src="docs/images/bench-0.11.0/protobuf-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/bench-0.12.0/protobuf-dark.svg">
+  <img alt="Protobuf on Native Image: TruffleData generated messages, slab and session against protobuf-java" src="docs/images/bench-0.12.0/protobuf-light.svg">
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/bench-0.11.0/csv-dark.svg">
-  <img alt="CSV on Native Image: TruffleData batches and index scan against FastCSV and Jackson CSV" src="docs/images/bench-0.11.0/csv-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/bench-0.12.0/csv-dark.svg">
+  <img alt="CSV on Native Image: TruffleData batches and index scan against FastCSV and Jackson CSV" src="docs/images/bench-0.12.0/csv-light.svg">
 </picture>
 
 <details>
 <summary>YAML: TruffleData APIs compared</summary>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/bench-0.11.0/yaml-dark.svg">
-  <img alt="YAML on Native Image: five TruffleData ways to consume the same parse" src="docs/images/bench-0.11.0/yaml-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/bench-0.12.0/yaml-dark.svg">
+  <img alt="YAML on Native Image: five TruffleData ways to consume the same parse" src="docs/images/bench-0.12.0/yaml-light.svg">
 </picture>
 
 </details>
 
 These are workload-specific results on one machine, not guarantees. Java heap figures
 exclude native memory. Comparisons are within one suite's fixture; the card notes state each
-fixture's terms. See the [methodology and regeneration](docs/COMPARISON_BENCHMARKS.md#release-0110-benchmark-cards),
-[every plotted value](docs/images/bench-0.11.0/cards.md), [raw reports](benchmarks/results/bench-0.11.0/README.md)
-and [image and source hashes](docs/images/bench-0.11.0/manifest.json).
+fixture's terms. See the [methodology and regeneration](docs/COMPARISON_BENCHMARKS.md#release-0120-benchmark-cards),
+[every plotted value](docs/images/bench-0.12.0/cards.md), [raw reports](benchmarks/results/bench-0.12.0/README.md)
+and [image and source hashes](docs/images/bench-0.12.0/manifest.json).
 
 <details>
 <summary>0.10.0 paired SVM charts</summary>

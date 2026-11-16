@@ -11,7 +11,7 @@ Sources: `protobuf-runtime/.../Layout.java` (layout compiler and the `TDL1` prog
 `SlabFormat.java` (constants and accessors), the executable model of this document,
 `protobuf-runtime/src/test/.../SlabReference.java`, which the golden slabs in
 `protobuf-runtime/src/test/resources/slab/` are checked against, and the native producer
-`protobuf-buffa/native/slab.rs` (seam ABI 11, below), which reproduces every golden byte for byte.
+`protobuf-buffa/native/slab.rs` (seam ABI 12, below), which reproduces every golden byte for byte.
 
 ## Java ownership
 

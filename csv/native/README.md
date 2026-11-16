@@ -92,7 +92,7 @@ is fused with the batch builder: each field is written into its column (span or 
 as its entry is consumed, and only records the builder declines take the per-record path. It serves every strict
 format and the Commons formats the index represents (one-byte delimiter, no comment marker, no
 escape other than the quote, none of the Commons trims or a trailing delimiter), and it reproduces
-the Commons lexer's framing (empty lines commit with the next record; `ignoreEmptyLines(false)`
+the Commons lexer's framing (empty lines commit at once; `ignoreEmptyLines(false)`
 keeps them as one-field records; a doubled-quote field is one raw complex span). The reference
 consumer below is `IndexedScanner` in `//csv/kernel`.
 

@@ -276,7 +276,7 @@ std::string text_of(const myna_value_view* view, size_t index) {
 void sessions() {
   static_assert(sizeof(JsonLimitsStruct) == 40, "session limits");
   JsonLimitsStruct limits{1024 * 1024, 1024 * 1024, 100000, 1024 * 1024, 128};
-  void* s = td_json_session_create(&limits);
+  JsonSession* s = td_json_session_create(&limits);
   require(s != nullptr);
   auto run = [&](const std::string& source, JsonResult& out, uint32_t flags = 0) {
     return td_json_session_decode(s, reinterpret_cast<const uint8_t*>(source.data()), source.size(),
@@ -441,7 +441,7 @@ std::u16string utf16_of(const std::string& utf8) {
 // Task D2: per-document text arenas.
 void text_arenas() {
   JsonLimitsStruct limits{1024 * 1024, 1024 * 1024, 100000, 1024 * 1024, 128};
-  void* s = td_json_session_create(&limits);
+  JsonSession* s = td_json_session_create(&limits);
   require(s != nullptr);
   JsonResult result{};
   alignas(8) uint8_t arena[4096];
@@ -496,7 +496,7 @@ void text_arenas() {
 // Task D3: UTF-16 and Latin-1 input.
 void utf16_input() {
   JsonLimitsStruct limits{1024 * 1024, 1024 * 1024, 100000, 1024 * 1024, 128};
-  void* s = td_json_session_create(&limits);
+  JsonSession* s = td_json_session_create(&limits);
   require(s != nullptr);
   JsonResult result{};
   alignas(8) uint8_t arena[4096];
@@ -510,7 +510,7 @@ void utf16_input() {
     require(!x.pool_bytes || std::memcmp(x.pool, y.pool, x.pool_bytes) == 0);
     require(!x.directory_count || std::memcmp(x.directory, y.directory, x.directory_count * 8) == 0);
   };
-  void* reference = td_json_session_create(&limits);
+  JsonSession* reference = td_json_session_create(&limits);
   JsonResult expected{};
   require(td_json_session_decode(reference, reinterpret_cast<const uint8_t*>(utf8.data()), utf8.size(), 0, nullptr, 0, &expected) == TD_JSON_OK);
   require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>(units.data()), 2 * units.size(), TD_JSON_UTF16_INPUT, nullptr, 0, &result) == TD_JSON_OK);
@@ -539,7 +539,7 @@ void utf16_input() {
   // Limits apply to the transcoded UTF-8 length.
   JsonLimitsStruct tight = limits;
   tight.max_input_bytes = 8;
-  void* small = td_json_session_create(&tight);
+  JsonSession* small = td_json_session_create(&tight);
   std::u16string wide = u"[\"中中\"]";  // 12 UTF-16 bytes, 10 UTF-8 bytes
   require(td_json_session_decode(small, reinterpret_cast<const uint8_t*>(wide.data()), 2 * wide.size(), TD_JSON_UTF16_INPUT, nullptr, 0, &result) == TD_JSON_LIMIT);
   std::u16string fits = u"[\"中\"]";  // 7 UTF-8 bytes
@@ -561,7 +561,7 @@ void compact_sessions() {
   JsonLimitsStruct unknown = limits;
   unknown.flags = 2;
   require(td_json_session_create(&unknown) == nullptr);
-  void* s = td_json_session_create(&limits);
+  JsonSession* s = td_json_session_create(&limits);
   require(s != nullptr);
   auto run = [&](const std::string& source, JsonResult& out, uint32_t flags = 0) {
     return td_json_session_decode(s, reinterpret_cast<const uint8_t*>(source.data()), source.size(), flags, nullptr, 0, &out);
@@ -641,7 +641,7 @@ void compact_sessions() {
   {
     std::u16string units = utf16_of(doc);
     JsonResult expected{};
-    void* reference = td_json_session_create(&limits);
+    JsonSession* reference = td_json_session_create(&limits);
     require(td_json_session_decode(reference, reinterpret_cast<const uint8_t*>(doc.data()), doc.size(), 0, nullptr, 0, &expected) == TD_JSON_OK);
     require(td_json_session_decode(s, reinterpret_cast<const uint8_t*>(units.data()), 2 * units.size(), TD_JSON_UTF16_INPUT,
                                    nullptr, 0, &borrowed) == TD_JSON_OK);

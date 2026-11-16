@@ -158,6 +158,7 @@ public final class TapeBuilder {
         if (child >= size) throw new IllegalStateException("Object key without a value");
       }
       child = after(child);
+      if (child <= index) throw new IllegalStateException("Tape container is not closed");
     }
     int stored = Math.min(count, MAX_LENGTH);
     long second = words[index + 1];

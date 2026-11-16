@@ -3,7 +3,9 @@ package dev.elide.truffledata.csv;
 import static org.junit.jupiter.api.Assertions.*;
 
 import dev.elide.truffledata.TargetAbi;
+import dev.elide.truffledata.csv.kernel.CsvIndex;
 import dev.elide.truffledata.csv.kernel.generated.CsvNativeAbi;
+import dev.elide.truffledata.csv.kernel.generated.CsvNativeConstants;
 import dev.elide.truffledata.csv.kernel.jvm.FfmIndexer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,5 +53,29 @@ final class CsvNativeAbiTest {
     assertTrue(failure.getMessage().contains("ABI fingerprint mismatch"), failure.getMessage());
     FfmIndexer.Library accepted = FfmIndexer.Library.load(runfile("csv/native/csv_shared.so"));
     assertTrue(accepted.kernel() >= 0);
+  }
+
+  /**
+   * The Java kernels' index contract ({@link CsvIndex}, in the pure-Java //csv module) and the
+   * native ABI's (csv/native/csv.seam) name the same entry flags, carry bits, call bound and
+   * kernel ids.
+   */
+  @Test
+  void javaIndexContractMatchesTheSeam() {
+    assertEquals(CsvNativeConstants.Entry.QUOTED, CsvIndex.QUOTED);
+    assertEquals(CsvNativeConstants.Entry.ESCAPED, CsvIndex.ESCAPED);
+    assertEquals(CsvNativeConstants.Entry.UNQUOTED, CsvIndex.UNQUOTED);
+    assertEquals(CsvNativeConstants.Entry.OFFSET_MASK, CsvIndex.OFFSET_MASK);
+    assertEquals(CsvNativeConstants.MAX_CALL_BYTES, CsvIndex.MAX_CALL_BYTES);
+    assertEquals(CsvNativeConstants.Carry.INSIDE, CsvIndex.CARRY_INSIDE);
+    assertEquals(CsvNativeConstants.Carry.CLOSING, CsvIndex.CARRY_CLOSING);
+    assertEquals(CsvNativeConstants.Carry.QUOTED, CsvIndex.CARRY_QUOTED);
+    assertEquals(CsvNativeConstants.Carry.ESCAPED, CsvIndex.CARRY_ESCAPED);
+    assertEquals(CsvNativeConstants.Carry.UNQUOTED, CsvIndex.CARRY_UNQUOTED);
+    assertEquals(CsvNativeConstants.Carry.ALL, CsvIndex.CARRY_MASK);
+    for (int kernel = CsvNativeConstants.Kernel.SCALAR;
+        kernel <= CsvNativeConstants.Kernel.AVX512;
+        kernel++)
+      assertEquals(CsvNativeConstants.Kernel.name(kernel), CsvIndex.kernelName(kernel));
   }
 }

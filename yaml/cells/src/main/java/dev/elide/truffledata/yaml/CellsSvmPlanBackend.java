@@ -7,7 +7,6 @@ import dev.elide.truffledata.yaml.cells.generated.YamlCellsTruffle;
 import dev.elide.truffledata.yaml.generated.Yaml;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.UnmanagedMemory;
-import org.graalvm.nativeimage.c.type.VoidPointer;
 
 /**
  * The static plan with the cells route: {@code typed_decode} goes through the cell's static {@code
@@ -42,7 +41,7 @@ final class CellsSvmPlanBackend extends YamlPlan.Backend {
 
   @Override
   TypedOwner decode(byte[] utf8, Schema[] schemas) {
-    VoidPointer result = UnmanagedMemory.calloc(Yaml.YamlTypedResult.SIZE);
+    Yaml.YamlTypedResult result = UnmanagedMemory.calloc(Yaml.YamlTypedResult.SIZE);
     if (result.isNull()) throw new OutOfMemoryError("YAML result allocation");
     try {
       int status;

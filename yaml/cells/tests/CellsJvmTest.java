@@ -12,6 +12,7 @@ import dev.elide.myna.truffle.NativeResource;
 import dev.elide.myna.truffle.NativeStatusException;
 import dev.elide.truffledata.tape.JavaSink;
 import dev.elide.truffledata.yaml.cells.generated.YamlCellsJvmTruffle;
+import dev.elide.truffledata.yaml.generated.YamlConstants.Status;
 import dev.elide.truffledata.yaml.generated.YamlFFM;
 import java.util.HexFormat;
 import java.lang.foreign.Arena;
@@ -596,7 +597,7 @@ final class CellsJvmTest {
       none.fill((byte) 0x5a);
       NativeStatusException argument =
           assertThrows(NativeStatusException.class, () -> retain.execute(new Object[] {session, NativeBytes.of(none, true)}));
-      assertEquals(1, argument.status(), "TD_YAML_ARGUMENT");
+      assertEquals(Status.ARGUMENT, argument.status(), "TD_YAML_ARGUMENT");
       assertEquals(0L, none.get(ValueLayout.JAVA_LONG, 0), "the guest's buffer holds what the create left");
       // A plan without records is TD_YAML_ARGUMENT too.
       MemorySegment records = arena.allocate(8, 8);
@@ -604,7 +605,7 @@ final class CellsJvmTest {
           assertThrows(
               NativeStatusException.class,
               () -> plan.execute(new Object[] {NativeBytes.of(records, false), 0L, null, 0L, 0L, NativeBytes.of(options, false), NativeBytes.of(arena.allocate(8, 8), true)}));
-      assertEquals(1, empty.status(), "TD_YAML_ARGUMENT");
+      assertEquals(Status.ARGUMENT, empty.status(), "TD_YAML_ARGUMENT");
 
       assertEquals(0, decode.executeInt(new Object[] {session, new HeapBytes(yaml, false), 0, null, NativeBytes.of(borrowed, true)}));
       String expected = tape(borrowed);
@@ -617,6 +618,12 @@ final class CellsJvmTest {
           assertInstanceOf(NativeResource.class, retain.execute(new Object[] {session, NativeBytes.of(retained, true)}));
       assertEquals("YamlResult", result.type());
       assertEquals(expected, tape(retained));
+      // The overwritten results of session_decode and stream_next stay ptr<void> in yaml.seam, so
+      // they refuse a retained result's owner, which the call would otherwise overwrite and leak.
+      assertThrows(
+          NativeCellException.class,
+          () -> decode.executeInt(new Object[] {session, new HeapBytes(yaml, false), 0, null, result}));
+      assertEquals(expected, tape(retained), "the retained result is untouched");
 
       // A stream holds its session open; a retained result does not.
       NativeResource stream =
@@ -624,13 +631,15 @@ final class CellsJvmTest {
       byte[] documents = "x: 1\n---\ny: [2]\n".getBytes(StandardCharsets.UTF_8);
       assertEquals(documents.length, feed.executeLong(new Object[] {stream, new HeapBytes(documents, false)}));
       finish.execute(new Object[] {stream});
+      assertThrows(NativeCellException.class, () -> next.executeInt(new Object[] {stream, 0, result}));
+      assertEquals(expected, tape(retained), "the retained result is untouched");
       MemorySegment out = arena.allocate(YamlFFM.YamlResult_LAYOUT);
       assertEquals(0, next.executeInt(new Object[] {stream, 0, NativeBytes.of(out, true)}));
       assertNotEquals("no view", tape(out));
       assertThrows(NativeCellException.class, () -> sessionRelease.execute(new Object[] {session}));
       assertFalse(session.isClosed(), "a session with an open stream stays open");
       assertEquals(0, next.executeInt(new Object[] {stream, 0, NativeBytes.of(out, true)}));
-      assertEquals(8, next.executeInt(new Object[] {stream, 0, NativeBytes.of(out, true)}), "TD_YAML_STREAM_EMPTY");
+      assertEquals(Status.STREAM_EMPTY, next.executeInt(new Object[] {stream, 0, NativeBytes.of(out, true)}), "TD_YAML_STREAM_EMPTY");
       streamRelease.execute(new Object[] {stream});
       assertTrue(stream.isClosed());
       assertThrows(NativeCellException.class, () -> next.executeInt(new Object[] {stream, 0, NativeBytes.of(out, true)}));

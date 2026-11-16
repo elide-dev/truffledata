@@ -43,6 +43,11 @@ public final class CsvRow extends AbstractRow {
     return batch.firstRecord + index;
   }
 
+  @Override
+  protected boolean scoped() {
+    return batch.mapped();
+  }
+
   public boolean isNull(int column) {
     batch.checkLive();
     return batch.columns[column].state(index) == Column.NULL;

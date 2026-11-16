@@ -376,6 +376,14 @@ final class JavaKernelDifferentialTest {
       "plain: 0x1F\n'single': 'it''s'\n\"double\": \"a\\tb\"\nmulti: one\n  two\nblock: |\n  text\nflow: [1, two , +3]\nempty:\n",
       "- x # note\n- y\n# trailing\n- z\n", "- a\n- folded: >\n    one\n    two\n",
       "a: |+\n  keep\n\n\nb: >2\n   indented\n", "- |\n  text\n# comment\n- next\n",
+      // keep-chomped block scalars whose last content line reaches EOF without a final line
+      // break: keep chomping preserves trailing line breaks, of which there are none at EOF, so
+      // the value ends at the last content byte (clip adds one, strip drops it; both unchanged).
+      "- |+\n  a", "- >+\n  a", "k: |+\n  a", "- |+\n  a\n  b", "- >+\n  a\n  b",
+      "- |+\n  a  ", "- |1+\n  a", "- &x |+\n  a", "- !t |+\n  a",
+      // controls: a final line break is present, so keep chomping keeps it; a comment after the
+      // content terminates the last line, so the value is unchanged at EOF.
+      "- |+\n  a\n", "- |+\n  a\n# c", "- |-\n  a", "- |\n  a",
       // multiple documents
       "a\n---\nb\n", "--- a\n--- b\n", "a\n...\n---\nb\n", "---\n---\n", "--- a\n...\n",
       // schemas (semantics_test.cc)

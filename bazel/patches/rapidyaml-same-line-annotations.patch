@@ -1,0 +1,17 @@
+--- a/src/c4/yml/parse_engine.def.hpp
++++ b/src/c4/yml/parse_engine.def.hpp
+@@ -8298,6 +8298,14 @@
+                               // while not at the first token. That
+                               // means we must have same-line
+                               // annotations.
++        // The assertion above and the ones below are compiled out in release
++        // builds; malformed input (annotations split across lines, fuzz
++        // finding) can leave no same-line annotation, which would reach
++        // C4_UNREACHABLE() below.
++        if C4_UNLIKELY(total == 0)
++        {
++            _c4err("parse error");
++        }
+         auto get_first_on_same_line = [this](EntryPtr not_this_one){
+             for(size_t i = 0; i < m_pending_anchors.num_entries; ++i)
+                 if(&m_pending_anchors.annotations[i] != not_this_one

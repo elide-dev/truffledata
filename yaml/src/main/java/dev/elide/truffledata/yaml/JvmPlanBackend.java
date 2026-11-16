@@ -7,7 +7,6 @@ import dev.elide.truffledata.yaml.generated.YamlFFM;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.charset.StandardCharsets;
 
 /** JVM native plan and result lifetimes, each holding the loaded library independently. */
 final class JvmPlanBackend extends YamlPlan.Backend {
@@ -144,24 +143,26 @@ final class JvmPlanBackend extends YamlPlan.Backend {
       } catch (Throwable failure) {
         throw YamlJvm.callFailure(failure);
       }
-      if (status == 2 || status == 4 || status == 6 || status == 7) {
-        int length = Math.min(255, result.get(ValueLayout.JAVA_INT, 128));
-        String text =
-            new String(
-                result.asSlice(136, length).toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
-        YamlStatus.checkDetailed(
-            status,
-            text,
-            result.get(ValueLayout.JAVA_LONG, 112),
-            result.get(ValueLayout.JAVA_LONG, 120));
-      }
-      YamlStatus.checkStatus(status);
+      checkTyped(status, result);
       TypedOwner owner = new JvmTypedOwner(result, schemas, () -> retire(result, resultArena));
       published = true;
       return owner;
     } finally {
       if (!published) retire(result, resultArena);
     }
+  }
+
+  static void checkTyped(int status, MemorySegment result) {
+    if (YamlStatus.detailed(status))
+      YamlStatus.checkDetailed(
+          status,
+          JvmSessionBackend.message(
+              result,
+              YamlFFM.YamlTypedResult_error_message_OFFSET,
+              result.get(ValueLayout.JAVA_INT, YamlFFM.YamlTypedResult_error_message_length_OFFSET)),
+          result.get(ValueLayout.JAVA_LONG, YamlFFM.YamlTypedResult_error_line_OFFSET),
+          result.get(ValueLayout.JAVA_LONG, YamlFFM.YamlTypedResult_error_column_OFFSET));
+    YamlStatus.checkStatus(status);
   }
 
   // Hooks for the opt-in Myna cells route (yaml/cells, CellsJvmPlanBackend); never called here.

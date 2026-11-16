@@ -16,6 +16,8 @@ public final class TypedMessage extends ViewOwner implements ProtoMessage {
   }
 
   /** Complete exactly once, before exposing the message or any of its views to a guest. */
+  // Initialization before publication: no compiled code has read these fields yet.
+  @SuppressWarnings("TruffleCompilationFinalWrite")
   TypedMessage finish(TypedRow row, long nativeBytes) {
     if (this.row != null) throw new IllegalStateException("Typed message already initialized");
     this.row = row;

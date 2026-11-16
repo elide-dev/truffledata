@@ -56,6 +56,9 @@ public final class YamlSession extends TapeSession<YamlMessage> {
   }
 
   /** The backends on the class path, looked up once. */
+  // Deliberate: in an image the lookup runs at build time and seals exactly the backends linked in
+  // (META-INF/services of the svm or java backend jar).
+  @SuppressWarnings("TruffleHostValueInImageHeap")
   private static final class Providers {
     static final java.util.List<YamlSessionProvider> ALL = find();
 

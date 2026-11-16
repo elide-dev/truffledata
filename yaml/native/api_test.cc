@@ -31,11 +31,11 @@ YamlOptionsStruct defaults() {
   o.max_text_bytes = 64u << 20;
   o.max_aliases = 10000;
   o.max_alias_expansion = 1000000;
-  o.max_depth = 128;
+  o.max_depth = TRUFFLEDATA_YAML_MAX_DEPTH;
   return o;
 }
 
-int32_t run(void* s, const std::string& text, YamlResult& out, uint32_t flags = 0) {
+int32_t run(YamlSession* s, const std::string& text, YamlResult& out, uint32_t flags = 0) {
   return td_yaml_session_decode(s, reinterpret_cast<const uint8_t*>(text.data()), text.size(), flags, nullptr, 0, &out);
 }
 std::string error_text(const YamlResult& r) {
@@ -50,7 +50,8 @@ void typed_plans() {
   YamlRecordPlan record{0, 1};
   YamlScalarField field{};
   field.name = reinterpret_cast<uint8_t*>(const_cast<char*>("n"));
-  field.name_length = 1; field.kind = 1; field.flags = 1; field.child = UINT32_MAX;
+  field.name_length = 1; field.kind = TRUFFLEDATA_YAML_FIELD_KIND_INT64; field.flags = TRUFFLEDATA_YAML_FIELD_FLAGS_REQUIRED;
+  field.child = TRUFFLEDATA_YAML_NO_CHILD;
   field.minimum = INT64_MIN; field.maximum = INT64_MAX;
   YamlPlan plan{};
   require(td_yaml_plan_create(&record, 1, &field, 1, 1024, &options, &plan) == TD_YAML_OK);
@@ -73,13 +74,13 @@ void typed_plans() {
   require(decode("n: 1", bad) == TD_YAML_ARGUMENT);
   field.child = 0;
   require(td_yaml_plan_create(&record, 1, &field, 1, 1024, &options, &plan) == TD_YAML_ARGUMENT);
-  field.child = UINT32_MAX;
+  field.child = TRUFFLEDATA_YAML_NO_CHILD;
   require(td_yaml_plan_create(&record, 1, &field, 1, 0, &options, &plan) == TD_YAML_LIMIT);
 }
 
 void sessions() {
   YamlOptionsStruct options = defaults();
-  void* s = td_yaml_session_create(&options);
+  YamlSession* s = td_yaml_session_create(&options);
   require(s != nullptr);
   YamlResult borrowed{}, kept{};
   const std::string first = "s: first document text beyond inline\nn: 1\n";
@@ -136,7 +137,7 @@ void sessions() {
   // Input limits apply per document.
   YamlOptionsStruct tight = defaults();
   tight.max_input_bytes = 16;
-  void* small = td_yaml_session_create(&tight);
+  YamlSession* small = td_yaml_session_create(&tight);
   require(run(small, std::string(17, ' '), borrowed) == TD_YAML_LIMIT);
   require(run(small, "[1, 2]", borrowed) == TD_YAML_OK);
   td_yaml_session_release(small);
@@ -148,13 +149,13 @@ void sessions() {
   require(!kept.owner && !kept.view);
   // Invalid options.
   YamlOptionsStruct bad = defaults();
-  bad.max_depth = 129;
+  bad.max_depth = TRUFFLEDATA_YAML_MAX_DEPTH + 1;
   require(td_yaml_session_create(&bad) == nullptr);
   bad = defaults();
-  bad.schema = 4;
+  bad.schema = TRUFFLEDATA_YAML_SCHEMA_YAML_1_1 + 1;
   require(td_yaml_session_create(&bad) == nullptr);
   bad = defaults();
-  bad.complex_keys = 2;
+  bad.complex_keys = TRUFFLEDATA_YAML_COMPLEX_KEYS_PAIRS + 1;
   require(td_yaml_session_create(&bad) == nullptr);
   require(td_yaml_session_create(nullptr) == nullptr);
   require(std::strcmp(reinterpret_cast<const char*>(td_yaml_fingerprint()), TRUFFLEDATA_YAML_SEAM_ABI) == 0);
@@ -162,7 +163,7 @@ void sessions() {
 
 void directory_policy() {
   auto options = defaults();
-  void* s = td_yaml_session_create(&options);
+  YamlSession* s = td_yaml_session_create(&options);
   require(s != nullptr);
   YamlResult borrowed{}, kept{};
   const std::string doc = "[{a: 1, b: 2}, {a: 3, b: 4}, {b: 5, a: 6}, {a: 7, b: 8}, {a: 9}]";
@@ -221,7 +222,7 @@ void directory_policy() {
 
 void persistent_templates() {
   auto options = defaults();
-  void* s = td_yaml_session_create(&options);
+  YamlSession* s = td_yaml_session_create(&options);
   require(s);
   YamlResult borrowed{}, kept{};
   for (uint32_t flags : {0u, TD_YAML_WANT_DIRECTORIES}) {
@@ -246,7 +247,7 @@ void persistent_templates() {
 
 void shared_text_capacity() {
   YamlOptionsStruct options = defaults();
-  void* session = td_yaml_session_create(&options);
+  YamlSession* session = td_yaml_session_create(&options);
   require(session);
   YamlResult document{};
   YamlTextResult text{};
