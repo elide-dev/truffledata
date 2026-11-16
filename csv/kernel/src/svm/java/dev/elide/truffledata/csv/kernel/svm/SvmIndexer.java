@@ -33,14 +33,7 @@ public final class SvmIndexer extends CsvIndexer {
   /** {@code kernel} is a csv/native Kernel id (0 for the best this CPU supports). */
   public SvmIndexer(byte delimiter, byte quote, boolean quoting, int kernel, int leafBytes) {
     super(delimiter, quote, quoting);
-    if (!verified) {
-      // The image's ABI class (Platform.includedIn folds at image build time): one constant.
-      String expected =
-          CsvNativeAbi.fingerprint(Platform.includedIn(Platform.LINUX_AARCH64.class));
-      if (!CTypeConversion.toJavaString(CsvNative.fingerprint()).equals(expected))
-        throw new IllegalStateException("Myna/CSV ABI fingerprint mismatch");
-      verified = true;
-    }
+    verifyOnce();
     int resolved = CsvNative.kernel(kernel);
     if (resolved < 0) throw new IllegalArgumentException("CSV native kernel " + kernel);
     this.kernel = resolved;
@@ -51,6 +44,18 @@ public final class SvmIndexer extends CsvIndexer {
                 quoting ? CsvNativeConstants.Format.QUOTING : 0, delimiter),
             quote);
     name = "native-" + CsvIndex.kernelName(resolved) + (leafBytes > 0 ? "-svm-leaf" : "-svm");
+  }
+
+  /** Checks the linked library's ABI fingerprint once per process (the image's one library). */
+  private static void verifyOnce() {
+    if (!verified) {
+      // The image's ABI class (Platform.includedIn folds at image build time): one constant.
+      String expected =
+          CsvNativeAbi.fingerprint(Platform.includedIn(Platform.LINUX_AARCH64.class));
+      if (!CTypeConversion.toJavaString(CsvNative.fingerprint()).equals(expected))
+        throw new IllegalStateException("Myna/CSV ABI fingerprint mismatch");
+      verified = true;
+    }
   }
 
   @Override

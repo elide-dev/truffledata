@@ -274,6 +274,7 @@ public final class YamlComparison {
       this.mode = mode;
     }
 
+    @CompilerDirectives.TruffleBoundary
     public String getName() {
       return "GenericReads[" + mode + "]";
     }

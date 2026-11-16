@@ -127,7 +127,8 @@ public abstract class Accessor {
   /** Strict-mode audit that a bound hook received a row this accessor accepts. */
   protected final void assertAccepted(Object row) {
     if (STRICT && !accepts(row)) {
-      CompilerDirectives.transferToInterpreterAndInvalidate();
+      // A failed audit is fatal: nothing to respecialize, so leave without invalidating.
+      CompilerDirectives.transferToInterpreter();
       throw new AssertionError("Bound accessor read of a row it does not accept");
     }
   }

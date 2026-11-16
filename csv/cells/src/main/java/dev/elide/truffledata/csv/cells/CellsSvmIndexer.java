@@ -46,15 +46,7 @@ final class CellsSvmIndexer extends CsvIndexer {
 
   CellsSvmIndexer(byte delimiter, byte quote, boolean quoting, int kernel, int leafBytes) {
     super(delimiter, quote, quoting);
-    if (!verified) {
-      // The image's ABI class (Platform.includedIn folds at image build time): one constant.
-      String expected =
-          CsvNativeAbi.fingerprint(Platform.includedIn(Platform.LINUX_AARCH64.class));
-      CCharPointer text = WordFactory.pointer(CsvCellsTruffle.fingerprint_Cell.invoke());
-      if (!CTypeConversion.toJavaString(text).equals(expected))
-        throw new IllegalStateException("Myna/CSV ABI fingerprint mismatch");
-      verified = true;
-    }
+    verifyOnce();
     int resolved = CsvCellsTruffle.kernel_Cell.invoke(kernel);
     if (resolved < 0) throw new IllegalArgumentException("CSV native kernel " + kernel);
     this.kernel = resolved;
@@ -68,6 +60,19 @@ final class CellsSvmIndexer extends CsvIndexer {
         "native-"
             + CsvIndex.kernelName(resolved)
             + (leafBytes > 0 ? "-svm-leaf-cells" : "-svm-cells");
+  }
+
+  /** Checks the linked library's ABI fingerprint once per process (the image's one library). */
+  private static void verifyOnce() {
+    if (!verified) {
+      // The image's ABI class (Platform.includedIn folds at image build time): one constant.
+      String expected =
+          CsvNativeAbi.fingerprint(Platform.includedIn(Platform.LINUX_AARCH64.class));
+      CCharPointer text = WordFactory.pointer(CsvCellsTruffle.fingerprint_Cell.invoke());
+      if (!CTypeConversion.toJavaString(text).equals(expected))
+        throw new IllegalStateException("Myna/CSV ABI fingerprint mismatch");
+      verified = true;
+    }
   }
 
   @Override
