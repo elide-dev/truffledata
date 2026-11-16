@@ -1,13 +1,57 @@
 module truffledata_bebop abi=1 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.bebop.kernel.generated java_class=BebopNative c_library=truffledata_bebop c_library_static=true
+# td_bebop_validate(_leaf) results: 0 for a valid encoding, else the failure reason. The codes are
+# the Java validator's (BebopValidator.REASONS, the reference); `program` means the schema program
+# or the call is not what the Java codec produces.
+enum Reason type=i64
+  value valid = 0
+  value truncated = 1
+  value length = 2
+  value count_bytes = 3
+  value count_limit = 4
+  value work_limit = 5
+  value allocation_limit = 6
+  value depth_limit = 7
+  value string_bytes = 8
+  value string_terminator = 9
+  value string_utf8 = 10
+  value boolean = 11
+  value nan = 12
+  value timestamp = 13
+  value duration = 14
+  value enum_member = 15
+  value set_order = 16
+  value map_order = 17
+  value map_duplicate = 18
+  value unknown_tag = 19
+  value field_range = 20
+  value unknown_branch = 21
+  value branch_range = 22
+  value trailing = 23
+  value byte_limit = 24
+  value control_reserved = 25
+  value control_width = 26
+  value directory_truncated = 27
+  value directory_order = 28
+  value directory_rank = 29
+  value directory_empty_block = 30
+  value directory_tag_256 = 31
+  value directory_canonical = 32
+  value index_size = 33
+  value payload_no_directory = 34
+  value width_minimal = 35
+  value boundary = 36
+  value utc_offset = 37
+  value program = 255
+end
 import fingerprint symbol=td_bebop_fingerprint return=ptr<u8> error=no_failure native_leaf=true@explicit_contract
 end
-import validate symbol=td_bebop_validate return=i64 error=no_failure native_leaf=false@explicit_contract
+import validate symbol=td_bebop_validate return=i64 enum=Reason error=no_failure native_leaf=false@explicit_contract
   param program type=ptr<u8> nullable=false ownership=borrowed access=read
   param program_length type=u64
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64
 end
-import validate_leaf symbol=td_bebop_validate_leaf return=i64 error=no_failure native_leaf=true@explicit_contract
+import validate_leaf symbol=td_bebop_validate_leaf return=i64 enum=Reason error=no_failure native_leaf=true@explicit_contract
   param program type=ptr<u8> nullable=false ownership=borrowed access=read
   param program_length type=u64
   param data type=ptr<u8> nullable=false ownership=borrowed access=read

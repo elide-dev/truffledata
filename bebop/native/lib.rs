@@ -12,8 +12,7 @@ mod seam {
 
 mod validate;
 
-/// Program or input that is not what the Java side produces.
-const INVALID_PROGRAM: i64 = 255;
+use seam::Reason;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn td_bebop_fingerprint() -> *mut u8 {
@@ -31,13 +30,14 @@ pub unsafe extern "C" fn td_bebop_validate(
     program_length: u64,
     data: *const u8,
     length: u64,
-) -> i64 {
+) -> Reason {
     let program = unsafe { region(program, program_length) };
     let data = unsafe { region(data, length) };
     match std::panic::catch_unwind(|| validate::run(program, data)) {
-        Ok(Ok(())) => 0,
-        Ok(Err(reason)) => reason as i64,
-        Err(_) => INVALID_PROGRAM,
+        Ok(Ok(())) => Reason::VALID,
+        Ok(Err(reason)) => Reason(reason as i64),
+        // Program or input that is not what the Java side produces.
+        Err(_) => Reason::PROGRAM,
     }
 }
 
@@ -51,9 +51,11 @@ pub unsafe extern "C" fn td_bebop_validate_leaf(
     program_length: u64,
     data: *const u8,
     length: u64,
-) -> i64 {
+) -> Reason {
     unsafe { td_bebop_validate(program, program_length, data, length) }
 }
+
+seam::assert_implementations!(seam);
 
 unsafe fn region<'a>(pointer: *const u8, length: u64) -> &'a [u8] {
     if length == 0 || pointer.is_null() {

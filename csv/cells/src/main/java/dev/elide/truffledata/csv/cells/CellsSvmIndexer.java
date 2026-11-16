@@ -5,6 +5,7 @@ import dev.elide.truffledata.csv.kernel.cells.generated.CsvCellsTruffle;
 import dev.elide.truffledata.csv.kernel.CsvIndex;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
 import dev.elide.truffledata.csv.kernel.generated.CsvNativeAbi;
+import dev.elide.truffledata.csv.kernel.generated.CsvNativeConstants;
 import dev.elide.truffledata.csv.kernel.svm.SvmIndexer;
 import java.nio.file.Path;
 import org.graalvm.nativeimage.PinnedObject;
@@ -58,7 +59,11 @@ final class CellsSvmIndexer extends CsvIndexer {
     if (resolved < 0) throw new IllegalArgumentException("CSV native kernel " + kernel);
     this.kernel = resolved;
     this.leafBytes = leafBytes;
-    format = (delimiter & 0xFF) | (quote & 0xFF) << 8 | (quoting ? 1 << 16 : 0);
+    format =
+        CsvNativeConstants.Format.withQuote(
+            CsvNativeConstants.Format.withDelimiter(
+                quoting ? CsvNativeConstants.Format.QUOTING : 0, delimiter),
+            quote);
     name =
         "native-"
             + CsvIndex.kernelName(resolved)
@@ -95,8 +100,8 @@ final class CellsSvmIndexer extends CsvIndexer {
       in.close();
     }
     if (result < 0) throw new IllegalStateException("CSV native index failed: " + result);
-    carry = result & 0xFF;
-    return (int) (result >>> 8);
+    carry = result & ((1L << CsvNativeConstants.INDEX_COUNT_SHIFT) - 1);
+    return (int) (result >>> CsvNativeConstants.INDEX_COUNT_SHIFT);
   }
 
   /** simdutf validation of the pinned array through the cell ({@link SvmIndexer#invalidUtf8}). */
@@ -122,7 +127,9 @@ final class CellsSvmIndexer extends CsvIndexer {
    */
   static CsvIndexing.Provider provider() {
     String name =
-        new CellsSvmIndexer((byte) ',', (byte) '"', true, 0, SvmIndexer.LEAF_BYTES).name();
+        new CellsSvmIndexer(
+                (byte) ',', (byte) '"', true, CsvNativeConstants.Kernel.AUTO, SvmIndexer.LEAF_BYTES)
+            .name();
     return new CsvIndexing.Provider() {
       @Override
       public String name() {
@@ -131,7 +138,8 @@ final class CellsSvmIndexer extends CsvIndexer {
 
       @Override
       public CsvIndexer create(byte delimiter, byte quote, boolean quoting) {
-        return new CellsSvmIndexer(delimiter, quote, quoting, 0, SvmIndexer.LEAF_BYTES);
+        return new CellsSvmIndexer(
+            delimiter, quote, quoting, CsvNativeConstants.Kernel.AUTO, SvmIndexer.LEAF_BYTES);
       }
 
       @Override

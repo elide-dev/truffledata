@@ -13,6 +13,7 @@ import dev.elide.myna.truffle.NativeStatusException;
 import dev.elide.truffledata.ContractViolation;
 import dev.elide.truffledata.Limits;
 import dev.elide.truffledata.buffa.cells.generated.BuffaCellsJvmTruffle;
+import dev.elide.truffledata.buffa.generated.BuffaConstants;
 import dev.elide.truffledata.protobuf.CellsFixtures;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.SlabLimits;
@@ -124,7 +125,13 @@ final class CellsRouteTest {
       try (var input = reference.allocate(wire.length).put(wire);
           var output = reference.allocate(capacity)) {
         int extent =
-            reference.writeSlab(reference.prepareSlab(left), input, output, limits, 1, null);
+            reference.writeSlab(
+                reference.prepareSlab(left),
+                input,
+                output,
+                limits,
+                BuffaConstants.DecodeFlags.OWNING,
+                null);
         assertTrue(extent > 0, Integer.toString(extent));
         expected =
             ((MemorySegment) Objects.requireNonNull(output.lease.attachment))
@@ -234,7 +241,7 @@ final class CellsRouteTest {
               () ->
                   compile.execute(
                       new Object[] {new HeapBytes(bad, false), new HeapBytes(failed, true)}));
-      assertEquals(1, failure.status());
+      assertEquals(BuffaConstants.Status.MALFORMED, failure.status());
       assertArrayEquals(new byte[24], failed, "the struct as the failed create left it");
       try (var schema = reference.allocate(bad.length).put(bad)) {
         var production =
@@ -309,7 +316,52 @@ final class CellsRouteTest {
                         (long) (1 << 20),
                         new HeapBytes(new byte[24], true)
                       }));
-      assertEquals(2, failure.status());
+      assertEquals(BuffaConstants.Status.BUDGET, failure.status());
+      // typed is the Result's second constructor: the same in-place struct, the same destroy.
+      byte[] program =
+          NativeSchema.encode(NativeSchema.types(plan, List.of(), 1 << 20), List.of(), 1 << 20);
+      var typed = adopt(new BuffaCellsJvmTruffle.typed_Cell());
+      byte[] typedStruct = new byte[24];
+      var typedOwner =
+          (NativeResource)
+              typed.execute(
+                  new Object[] {
+                    new HeapBytes(program, false),
+                    new HeapBytes(wire, false),
+                    BuffaConstants.Format.BINARY,
+                    new HeapBytes(new byte[0], true),
+                    Limits.DEFAULT.maxCells(),
+                    Limits.DEFAULT.maxStringBytes(),
+                    32,
+                    (long) (1 << 20),
+                    new HeapBytes(typedStruct, true)
+                  });
+      assertEquals("Result", typedOwner.type());
+      assertArrayEquals(
+          MemorySegment.ofAddress(typedOwner.address())
+              .reinterpret(24)
+              .toArray(ValueLayout.JAVA_BYTE),
+          typedStruct);
+      release.execute(new Object[] {typedOwner});
+      assertTrue(typedOwner.isClosed());
+      // An unknown format is malformed: no owner, the native status.
+      var typedFailure =
+          assertThrows(
+              NativeStatusException.class,
+              () ->
+                  typed.execute(
+                      new Object[] {
+                        new HeapBytes(program, false),
+                        new HeapBytes(wire, false),
+                        3,
+                        new HeapBytes(new byte[0], true),
+                        Limits.DEFAULT.maxCells(),
+                        Limits.DEFAULT.maxStringBytes(),
+                        32,
+                        (long) (1 << 20),
+                        new HeapBytes(new byte[24], true)
+                      }));
+      assertEquals(BuffaConstants.Status.MALFORMED, typedFailure.status());
       // utf8_to_utf16: the input is borrowed, the ptr<u16> output stays an address.
       byte[] text = "aé中".getBytes(StandardCharsets.UTF_8);
       MemorySegment units = arena.allocate(2L * text.length, 2);
