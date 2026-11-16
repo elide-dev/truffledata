@@ -255,6 +255,12 @@ public abstract class TapeOwner {
   final String numberText(long node) {
     check();
     if (!format().hasAliases()) return lexicalText(node);
+    // A 0 lexical span is the tape ABI's "producer has no source token" state: quoted and block
+    // scalars published under retainSource=false (the YAML default), including tagged numbers
+    // such as !!int "..." or !!float "...". The pooled digits of a DECIMAL and the compact
+    // value of every other number kind still spell the number, so answer from them rather than
+    // throwing out of number interop. "Number spelling is available regardless" (docs/YAML.md).
+    if (lexical(node) == 0) return numberFallback(node);
     // Preserve exact decimal digits when the input already has JSON grammar. YAML-specific
     // spellings normalize without rounding through binary64; radix/sexagesimal forms use bits.
     String spelling = lexicalText(node).replace("_", "");
@@ -267,6 +273,11 @@ public abstract class TapeOwner {
         || spelling.charAt(point + 1) == 'e' || spelling.charAt(point + 1) == 'E'))
       spelling = spelling.substring(0, point + 1) + "0" + spelling.substring(point + 1);
     if (jsonNumber(spelling)) return spelling;
+    return numberFallback(node);
+  }
+
+  /** Canonical spelling of a number node with no usable lexical token (0 raw span). */
+  private String numberFallback(long node) {
     return switch (tape.kindAt(node)) {
       case ValueTape.I64 -> Long.toString(tape.signedValue(node));
       case ValueTape.U64 -> Long.toUnsignedString(tape.unsignedBits(node));

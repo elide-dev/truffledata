@@ -36,6 +36,7 @@ java_test(
         "SnakeYamlDifferentialTest.java",
         "SnakeYamlEventSourceTest.java",
         "YamlContractTest.java",
+        "YamlDecimalZeroSpanTest.java",
         "YamlEmitterTest.java",
         "YamlFuzz.java",
         "YamlIntegrationTest.java",
@@ -62,6 +63,8 @@ java_test(
         "dev.elide.truffledata.yaml.tests.JavaKernelTest",
         "--class",
         "dev.elide.truffledata.yaml.tests.JavaKernelDifferentialTest",
+        "--class",
+        "dev.elide.truffledata.yaml.tests.YamlDecimalZeroSpanTest",
     ],
     data = [
         "java_kernel_excluded.txt",
