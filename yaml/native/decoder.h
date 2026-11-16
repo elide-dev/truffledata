@@ -710,6 +710,12 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     // added this tag; keeping the cache within its 16-entry inline storage means it never allocates.
     if (m_tag_cache.m_entries.size() >= c4::yml::TagCache::Entries::sso_size - 1) m_tag_cache.clear();
     std::string_view uri = tag_uri(std::string_view(tag.str, tag.len));
+    // rapidyaml 0.16.0's verbatim-tag scanner accepts `!<>` as a tag token and resolves it to the
+    // empty URI (`<>`), which classify_tag puts in tag_kind::other and would intern under
+    // UnknownTags.PRESERVE. The YAML 1.2 spec requires `!<ns-uri-char+>` (a non-empty URI), and
+    // snakeyaml-engine rejects the same input at scan time, so reject it here at decode so both
+    // kernels agree and no empty URI enters the tape (where it would later crash YamlWriter.tag).
+    if (!tag.empty() && tag.front() == '<' && uri.empty()) fail("YAML invalid tag");
     tag_kind kind = classify_tag(uri);
     if (kind == tag_kind::other && rules_.reject_unknown_tags) fail("YAML unknown tag");
     pending_tag_ = kind;
