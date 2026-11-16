@@ -5,6 +5,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.Node;
 import dev.elide.myna.truffle.NativePointer;
 import dev.elide.truffledata.buffa.generated.Buffa;
+import dev.elide.truffledata.buffa.generated.BuffaConstants;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.SlabLimits;
 import dev.elide.truffledata.protobuf.SlabMessage;
@@ -97,7 +98,7 @@ public final class CellProbe implements AutoCloseable {
       byte[] output = new byte[capacity];
       int status;
       long bytes;
-      VoidPointer slot = WordFactory.pointer(result);
+      Buffa.SlabResult slot = WordFactory.pointer(result);
       // Neither address escapes this call. Empty buffers use a valid non-null address and zero size.
       // Plain try/finally, not try-with-resources: javac's addSuppressed is on the runtime
       // compilation blocklist (measured: the only violation the first image build reported).
@@ -119,7 +120,7 @@ public final class CellProbe implements AutoCloseable {
                   limits.maxDepth(),
                   limits.maxSlabBytes(),
                   slot);
-          bytes = Buffa.SlabResult.bytes(slot);
+          bytes = slot.bytes();
         } finally {
           pinnedOutput.close();
         }
@@ -165,7 +166,7 @@ public final class CellProbe implements AutoCloseable {
                     (long) limits.maxSlabBytes(),
                     NativePointer.of(result)
                   });
-          bytes = Buffa.SlabResult.bytes(WordFactory.pointer(result));
+          bytes = WordFactory.<Buffa.SlabResult>pointer(result).bytes();
         } finally {
           pinnedOutput.close();
         }
@@ -179,7 +180,9 @@ public final class CellProbe implements AutoCloseable {
   }
 
   private SlabMessage publish(byte[] input, byte[] output, int status, long bytes) {
-    if (status == 6 && bytes > output.length && bytes <= limits.maxSlabBytes()) {
+    if (status == BuffaConstants.Status.NEEDS_CAPACITY
+        && bytes > output.length
+        && bytes <= limits.maxSlabBytes()) {
       // A larger message than the learned capacity: the production retry, outside the fast path.
       CompilerDirectives.transferToInterpreterAndInvalidate();
       return retry(input, Math.toIntExact(bytes));
@@ -194,15 +197,9 @@ public final class CellProbe implements AutoCloseable {
     // WS2: the production backends publish their own decoder's output through the trusted
     // in-process entry with the result slot's certification and logical totals (seam ABI 12);
     // the slot is still held by this probe here, on every route.
-    VoidPointer slot = WordFactory.pointer(result);
+    Buffa.SlabResult slot = WordFactory.pointer(result);
     return SlabMessage.produced(
-        plan,
-        output,
-        extent,
-        Buffa.SlabResult.flags(slot),
-        Buffa.SlabResult.cells(slot),
-        Buffa.SlabResult.string_bytes(slot),
-        limits);
+        plan, output, extent, slot.flags(), slot.cells(), slot.string_bytes(), limits);
   }
 
   @TruffleBoundary

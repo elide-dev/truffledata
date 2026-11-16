@@ -1,4 +1,86 @@
 module truffledata_json abi=10 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.json.generated java_class=Json c_library=truffledata_json c_library_static=true
+
+# The integer protocol of the C ABI (json/native/api.h). This seam is its single source: api.h,
+# status.h, api.cc and the Java backends take every value below from the generated seam.h and
+# JsonConstants. Enums are open sets: nothing checks a returned value against these lists.
+
+# Status codes. No C++ exception crosses the generated C boundary. stream_empty/stream_truncated
+# have the values of TD_YAML_STREAM_EMPTY/TD_YAML_STREAM_TRUNCATED (one stream contract, read by
+# the shared tape/ TapeSession).
+enum Status type=i32
+  value ok = 0
+  value argument = 1
+  value limit = 2
+  value allocation = 3
+  value syntax = 4
+  value internal = 5
+  value contract = 6
+  value text_too_small = 7
+  value stream_empty = 8
+  value stream_truncated = 9
+end
+
+# session_decode(_small) and stream_next flags (stream_next accepts only want_directories). Other
+# bits are TD_JSON_ARGUMENT.
+flags DecodeFlags type=u32
+  bit want_text = 0
+  bit utf16_input = 1
+  bit latin1_input = 3
+  bit validate_only = 4
+  bit want_directories = 5
+end
+
+# session_decode_small accepts at most this many input bytes.
+const CRITICAL_LIMIT type=u32 value=4096
+# The largest max_depth any decode or session accepts.
+const MAX_DEPTH type=u32 value=128
+# Typed plans hold at most this many records, each of at most MAX_RECORD_FIELDS fields.
+const MAX_PLAN_RECORDS type=u32 value=65536
+const MAX_RECORD_FIELDS type=u32 value=64
+# Maximum record nesting of a typed plan; the root record alone has depth 1.
+const MAX_PLAN_DEPTH type=u32 value=32
+# JsonScalarField.child of a field that is not a record.
+const NO_CHILD type=u32 value=0xFFFFFFFF
+# TapeView.version of a compact tape (td_tape_view, TD_TAPE_VIEW_VERSION in tape/native/ctape.h).
+const TAPE_VIEW_VERSION type=u32 value=1
+
+# TapeView.flags (TD_TAPE_* in tape/native/ctape.h).
+flags TapeFlags type=u32
+  bit nonfinite = 0
+  bit has_meta = 1
+  bit no_directories = 2
+  bit yaml = 3
+end
+
+# Typed plans: JsonScalarField.kind, .length_unit, .float_bits and .flags.
+enum FieldKind type=u32
+  value boolean = 0
+  value int64 = 1
+  value uint64 = 2
+  value float64 = 3
+  value string = 4
+  value record = 5
+end
+enum LengthUnit type=u32
+  value unconstrained = 0
+  value utf16 = 1
+  value scalar_values = 2
+end
+# binary32 requires an exactly representable binary32 value; unspecified is binary64.
+enum FloatWidth type=u32
+  value unspecified = 0
+  value binary32 = 32
+  value binary64 = 64
+end
+flags FieldFlags type=u32
+  bit required = 0
+  bit nullable = 1
+  bit repeated = 2
+end
+
+# Thread-confined native session and stream handles (api.h).
+opaque JsonSession
+opaque JsonStream
 struct JsonResult size=88 align=8
   field owner type=ptr<void> offset=0
   field view type=ptr<void> offset=8
@@ -9,12 +91,12 @@ struct JsonResult size=88 align=8
   field index_allocations type=u64 offset=48
   field parser_input_capacity type=u64 offset=56
   field control_bytes type=u64 offset=64
-  field text_table type=ptr<void> offset=72
+  field text_table type=ptr<u64> offset=72
   field text_bytes type=u64 offset=80
 end
 import fingerprint symbol=td_json_fingerprint return=ptr<u8> error=no_failure native_leaf=true@explicit_contract
 end
-import decode symbol=td_json_decode return=i32 error=no_failure native_leaf=false@explicit_contract
+import decode symbol=td_json_decode return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64
   param max_input_bytes type=u64
@@ -22,9 +104,9 @@ import decode symbol=td_json_decode return=i32 error=no_failure native_leaf=fals
   param max_nodes type=u64
   param max_text_bytes type=u64
   param max_depth type=u32
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<JsonResult> nullable=false ownership=borrowed access=read_write
 end
-import decode_adopted symbol=td_json_decode_adopted return=i32 error=no_failure native_leaf=false@explicit_contract
+import decode_adopted symbol=td_json_decode_adopted return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64
   param capacity type=u64
@@ -33,28 +115,28 @@ import decode_adopted symbol=td_json_decode_adopted return=i32 error=no_failure 
   param max_nodes type=u64
   param max_text_bytes type=u64
   param max_depth type=u32
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<JsonResult> nullable=false ownership=borrowed access=read_write
 end
 import release symbol=td_json_release return=void error=no_failure native_leaf=false@explicit_contract
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<JsonResult> nullable=false ownership=borrowed access=read_write
 end
 struct TapeView size=88 align=8
   field version type=u32 offset=0
-  field flags type=u32 offset=4
-  field words type=ptr<void> offset=8
+  field flags type=u32 offset=4 flags=TapeFlags
+  field words type=ptr<u64> offset=8 count=word_count
   field word_count type=u64 offset=16
-  field pool type=ptr<u8> offset=24
+  field pool type=ptr<u8> offset=24 count=pool_bytes
   field pool_bytes type=u64 offset=32
-  field input type=ptr<u8> offset=40
+  field input type=ptr<u8> offset=40 count=input_bytes
   field input_bytes type=u64 offset=48
-  field directory type=ptr<void> offset=56
+  field directory type=ptr<u64> offset=56 count=directory_count
   field directory_count type=u64 offset=64
-  field meta type=ptr<void> offset=72
+  field meta type=ptr<u32> offset=72 count=meta_count
   field meta_count type=u64 offset=80
 end
-import result_myna symbol=td_json_result_myna return=i32 error=no_failure native_leaf=false@explicit_contract
-  param result type=ptr<void> nullable=false ownership=borrowed access=read
-  param output type=ptr<void> nullable=false ownership=borrowed access=read_write
+import result_myna symbol=td_json_result_myna return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
+  param result type=ptr<JsonResult> nullable=false ownership=borrowed access=read
+  param output type=ptr<JsonResult> nullable=false ownership=borrowed access=read_write
 end
 
 struct JsonLimitsStruct size=40 align=8
@@ -65,76 +147,80 @@ struct JsonLimitsStruct size=40 align=8
   field max_depth type=u32 offset=32
   field flags type=u32 offset=36
 end
-import session_create symbol=td_json_session_create return=ptr<void> error=no_failure native_leaf=false@explicit_contract
-  param limits type=ptr<void> nullable=false ownership=borrowed access=read
+import session_create symbol=td_json_session_create return=ptr<JsonSession> error=no_failure native_leaf=false@explicit_contract
+  param limits type=ptr<JsonLimitsStruct> nullable=false ownership=borrowed access=read
 end
-import session_decode symbol=td_json_session_decode return=i32 error=no_failure native_leaf=false@explicit_contract
-  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+# session_decode(_small) and stream_next write a *borrowed* JsonResult and overwrite the struct
+# they are given without checking for a live owner, so their `result` stays ptr<void>: typed
+# ptr<JsonResult>, the cells (json/cells/ownership.seam, where JsonResult is a resource) would
+# accept a live JsonResult owner there and the call would overwrite it.
+import session_decode symbol=td_json_session_decode return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<JsonSession> nullable=false ownership=borrowed access=read_write
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64
-  param flags type=u32
+  param flags type=u32 flags=DecodeFlags
   param text_out type=ptr<u8> nullable=true ownership=borrowed access=read_write
   param text_capacity type=u64
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
-import session_decode_small symbol=td_json_session_decode_small return=i32 error=no_failure native_leaf=true@explicit_contract
-  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+import session_decode_small symbol=td_json_session_decode_small return=i32 enum=Status error=no_failure native_leaf=true@explicit_contract
+  param session type=ptr<JsonSession> nullable=false ownership=borrowed access=read_write
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64
-  param flags type=u32
+  param flags type=u32 flags=DecodeFlags
   param text_out type=ptr<u8> nullable=true ownership=borrowed access=read_write
   param text_capacity type=u64
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
-import session_retain symbol=td_json_session_retain return=i32 error=no_failure native_leaf=false@explicit_contract
-  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+import session_retain symbol=td_json_session_retain return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<JsonSession> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<JsonResult> nullable=false ownership=borrowed access=read_write
 end
 import session_reset symbol=td_json_session_reset return=void error=no_failure native_leaf=true@explicit_contract
-  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param session type=ptr<JsonSession> nullable=false ownership=borrowed access=read_write
 end
 import session_release symbol=td_json_session_release return=void error=no_failure native_leaf=false@explicit_contract
-  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param session type=ptr<JsonSession> nullable=false ownership=borrowed access=read_write
 end
-import stream_create symbol=td_json_stream_create return=ptr<void> error=no_failure native_leaf=false@explicit_contract
-  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+import stream_create symbol=td_json_stream_create return=ptr<JsonStream> error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<JsonSession> nullable=false ownership=borrowed access=read_write
   param max_document_bytes type=u64
   param batch_bytes type=u64
 end
 import stream_feed symbol=td_json_stream_feed return=u64 error=no_failure native_leaf=false@explicit_contract
-  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param stream type=ptr<JsonStream> nullable=false ownership=borrowed access=read_write
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64
 end
 import stream_finish symbol=td_json_stream_finish return=void error=no_failure native_leaf=false@explicit_contract
-  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param stream type=ptr<JsonStream> nullable=false ownership=borrowed access=read_write
 end
-import stream_next symbol=td_json_stream_next return=i32 error=no_failure native_leaf=false@explicit_contract
-  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
-  param flags type=u32
+import stream_next symbol=td_json_stream_next return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
+  param stream type=ptr<JsonStream> nullable=false ownership=borrowed access=read_write
+  param flags type=u32 flags=DecodeFlags
   param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
-import stream_skip symbol=td_json_stream_skip return=i32 error=no_failure native_leaf=false@explicit_contract
-  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+import stream_skip symbol=td_json_stream_skip return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
+  param stream type=ptr<JsonStream> nullable=false ownership=borrowed access=read_write
 end
 import stream_truncated_bytes symbol=td_json_stream_truncated_bytes return=u64 error=no_failure native_leaf=false@explicit_contract
-  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param stream type=ptr<JsonStream> nullable=false ownership=borrowed access=read_write
 end
 import stream_release symbol=td_json_stream_release return=void error=no_failure native_leaf=false@explicit_contract
-  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param stream type=ptr<JsonStream> nullable=false ownership=borrowed access=read_write
 end
 
 struct JsonScalarField size=88 align=8
-  field name type=ptr<u8> offset=0
+  field name type=ptr<u8> offset=0 count=name_length
   field name_length type=u64 offset=8
-  field kind type=u32 offset=16
-  field flags type=u32 offset=20
+  field kind type=u32 offset=16 enum=FieldKind
+  field flags type=u32 offset=20 flags=FieldFlags
   field minimum type=i64 offset=24
   field maximum type=i64 offset=32
   field unsigned_maximum type=u64 offset=40
   field max_utf8_bytes type=u64 offset=48
-  field float_bits type=u32 offset=56
-  field length_unit type=u32 offset=60
+  field float_bits type=u32 offset=56 enum=FloatWidth
+  field length_unit type=u32 offset=60 enum=LengthUnit
   field minimum_length type=u64 offset=64
   field maximum_length type=u64 offset=72
   field child type=u32 offset=80
@@ -154,14 +240,14 @@ struct JsonPlan size=8 align=8
 end
 struct JsonScalarSlot size=40 align=8
   field bits type=u64 offset=0
-  field text type=ptr<u8> offset=8
+  field text type=ptr<u8> offset=8 count=text_length
   field text_length type=u64 offset=16
-  field lexical type=ptr<u8> offset=24
+  field lexical type=ptr<u8> offset=24 count=lexical_length
   field lexical_length type=u64 offset=32
 end
 struct JsonTypedResult size=112 align=8
   field owner type=ptr<void> offset=0
-  field slots type=ptr<void> offset=8
+  field slots type=ptr<JsonScalarSlot> offset=8 count=count
   field count type=u64 offset=16
   field present type=u64 offset=24
   field nulls type=u64 offset=32
@@ -172,28 +258,28 @@ struct JsonTypedResult size=112 align=8
   field index_allocations type=u64 offset=72
   field parser_input_capacity type=u64 offset=80
   field control_bytes type=u64 offset=88
-  field records type=ptr<void> offset=96
+  field records type=ptr<JsonRecordEntry> offset=96 count=record_count
   field record_count type=u64 offset=104
 end
-import plan_create symbol=td_json_plan_create return=i32 error=no_failure native_leaf=false@explicit_contract
-  param records type=ptr<void> nullable=false ownership=borrowed access=read
+import plan_create symbol=td_json_plan_create return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
+  param records type=ptr<JsonRecordPlan> nullable=false ownership=borrowed access=read
   param record_count type=u64
-  param fields type=ptr<void> nullable=true ownership=borrowed access=read
+  param fields type=ptr<JsonScalarField> nullable=true ownership=borrowed access=read
   param field_count type=u64
   param max_name_bytes type=u64
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<JsonPlan> nullable=false ownership=borrowed access=read_write
 end
 import plan_release symbol=td_json_plan_release return=void error=no_failure native_leaf=false@explicit_contract
-  param plan type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param plan type=ptr<JsonPlan> nullable=false ownership=borrowed access=read_write
 end
-import typed_decode symbol=td_json_typed_decode return=i32 error=no_failure native_leaf=false@explicit_contract
-  param plan type=ptr<void> nullable=false ownership=borrowed access=read
+import typed_decode symbol=td_json_typed_decode return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
+  param plan type=ptr<JsonPlan> nullable=false ownership=borrowed access=read
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64
   param max_input_bytes type=u64
   param max_index_bytes type=u64
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<JsonTypedResult> nullable=false ownership=borrowed access=read_write
 end
 import typed_release symbol=td_json_typed_release return=void error=no_failure native_leaf=false@explicit_contract
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<JsonTypedResult> nullable=false ownership=borrowed access=read_write
 end

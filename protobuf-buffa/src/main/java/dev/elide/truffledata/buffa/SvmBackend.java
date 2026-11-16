@@ -3,6 +3,7 @@ package dev.elide.truffledata.buffa;
 import dev.elide.truffledata.Limits;
 import dev.elide.truffledata.buffa.generated.Buffa;
 import dev.elide.truffledata.buffa.generated.BuffaAbi;
+import dev.elide.truffledata.buffa.generated.BuffaConstants;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.SlabLimits;
 import dev.elide.truffledata.protobuf.SlabMessage;
@@ -17,7 +18,10 @@ import org.jspecify.annotations.Nullable;
 final class SvmBackend implements BuffaWire.Backend {
   private static final int SLAB = Buffa.Result.SIZE;
 
-  /** One allocation: reusable typed-index and slab result slots. */
+  /**
+   * One allocation: the reusable index {@code Result} slot, then one slot that holds a {@code
+   * SlabResult} or, for compileLayout, the smaller {@code LayoutResult}.
+   */
   private final long resultAddress;
 
   private long copiedSlabInputBytes;
@@ -38,10 +42,14 @@ final class SvmBackend implements BuffaWire.Backend {
   private final Runnable retainAction = this::retainResult;
   private boolean closed;
 
-  private VoidPointer acquireResult() {
+  private Buffa.Result acquireResult() {
     if (closed || busy) throw new IllegalStateException("Native backend unavailable");
     busy = true;
     return WordFactory.pointer(resultAddress);
+  }
+
+  private Buffa.SlabResult slabResult() {
+    return WordFactory.pointer(resultAddress + SLAB);
   }
 
   private void releaseResult() {
@@ -71,6 +79,8 @@ final class SvmBackend implements BuffaWire.Backend {
     String expected = BuffaAbi.fingerprint(Platform.includedIn(Platform.LINUX_AARCH64.class));
     if (!new String(fingerprint, StandardCharsets.US_ASCII).equals(expected))
       throw new IllegalStateException("Myna/Buffa ABI fingerprint mismatch");
+    if (Buffa.LayoutResult.SIZE > Buffa.SlabResult.SIZE)
+      throw new IllegalStateException("LayoutResult does not fit the slab result slot");
     VoidPointer result = UnmanagedMemory.calloc(SLAB + Buffa.SlabResult.SIZE);
     if (result.isNull()) throw new OutOfMemoryError("Native result allocation");
     resultAddress = result.rawValue();
@@ -89,7 +99,7 @@ final class SvmBackend implements BuffaWire.Backend {
   public BuffaWire.Tape decode(WireInput input, Limits limits, int depth, int nativeBytes) {
     if (!(input.lease.attachment instanceof BuffaSvm.Address address))
       throw new IllegalArgumentException("Input is not SVM native memory");
-    VoidPointer result = acquireResult();
+    Buffa.Result result = acquireResult();
     try {
       if (cached) {
         Buffa.release(result);
@@ -103,13 +113,12 @@ final class SvmBackend implements BuffaWire.Backend {
               depth,
               nativeBytes,
               result));
-      long count = Buffa.Result.count(result), capacity = Buffa.Result.capacity(result);
+      long count = result.count(), capacity = result.capacity();
       ByteBuffer bytes =
           count == 0
               ? ByteBuffer.allocate(0)
               : CTypeConversion.asByteBuffer(
-                  Buffa.Result.data(result),
-                  Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
+                  result.data(), Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
       return new BuffaWire.Tape(bytes, count, capacity, releaseAction);
     } catch (RuntimeException | Error failure) {
       releaseResult();
@@ -134,7 +143,7 @@ final class SvmBackend implements BuffaWire.Backend {
         || !(input.lease.attachment instanceof BuffaSvm.Address inputAddress)
         || !(payload.lease.attachment instanceof BuffaSvm.Address payloadAddress))
       throw new IllegalArgumentException("Inputs are not SVM native memory");
-    VoidPointer result = acquireResult();
+    Buffa.Result result = acquireResult();
     try {
       int status =
           Buffa.typedReuse(
@@ -151,15 +160,13 @@ final class SvmBackend implements BuffaWire.Backend {
               nativeBytes,
               result);
       BuffaWire.status(status);
-      long count = Buffa.Result.count(result), capacity = Buffa.Result.capacity(result);
+      long count = result.count(), capacity = result.capacity();
       ByteBuffer bytes =
           count == 0
               ? ByteBuffer.allocate(0)
               : CTypeConversion.asByteBuffer(
-                  Buffa.Result.data(result),
-                  Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
-      return new BuffaWire.Tape(
-          bytes, count, capacity, retainAction, Buffa.Result.data(result).rawValue());
+                  result.data(), Math.toIntExact(Math.multiplyExact(count, Buffa.Field.SIZE)));
+      return new BuffaWire.Tape(bytes, count, capacity, retainAction, result.data().rawValue());
     } catch (RuntimeException | Error failure) {
       releaseResult();
       throw failure;
@@ -172,10 +179,10 @@ final class SvmBackend implements BuffaWire.Backend {
       throw new IllegalArgumentException("Schema is not SVM native memory");
     acquireResult();
     try {
-      VoidPointer output = WordFactory.pointer(resultAddress + SLAB);
+      Buffa.LayoutResult output = WordFactory.pointer(resultAddress + SLAB);
       BuffaWire.status(
           Buffa.compileLayout(WordFactory.pointer(address.value()), schema.size(), output));
-      long compiled = Buffa.Result.data(output).rawValue();
+      long compiled = output.data().rawValue();
       if (compiled == 0) throw new IllegalStateException("Native layout compilation returned null");
       return compiled;
     } finally {
@@ -201,7 +208,7 @@ final class SvmBackend implements BuffaWire.Backend {
       throw new IllegalArgumentException("Slab arena is not SVM native memory");
     acquireResult();
     try {
-      VoidPointer result = WordFactory.pointer(resultAddress + SLAB);
+      Buffa.SlabResult result = slabResult();
       int status =
           Buffa.decodeSlab(
               WordFactory.pointer((Long) compiled),
@@ -219,8 +226,10 @@ final class SvmBackend implements BuffaWire.Backend {
               limits.maxDepth(),
               limits.maxSlabBytes(),
               result);
-      long bytes = Buffa.SlabResult.bytes(result);
-      if (status == 6 && bytes > output.size() && bytes <= limits.maxSlabBytes())
+      long bytes = result.bytes();
+      if (status == BuffaConstants.Status.NEEDS_CAPACITY
+          && bytes > output.size()
+          && bytes <= limits.maxSlabBytes())
         return -Math.toIntExact(bytes);
       BuffaWire.status(status);
       if (bytes < 0 || bytes > output.size())
@@ -241,7 +250,7 @@ final class SvmBackend implements BuffaWire.Backend {
     acquireResult();
     boolean scratch = false;
     try {
-      VoidPointer result = WordFactory.pointer(resultAddress + SLAB);
+      Buffa.SlabResult result = slabResult();
       for (int attempt = 0; attempt < 2; attempt++) {
         byte[] output = new byte[capacity];
         int status;
@@ -255,7 +264,7 @@ final class SvmBackend implements BuffaWire.Backend {
                       ? WordFactory.pointer(resultAddress)
                       : pinnedInput.addressOfArrayElement(0),
                   input.length,
-                  1,
+                  BuffaConstants.DecodeFlags.OWNING,
                   WordFactory.nullPointer(),
                   capacity == 0 ? WordFactory.nullPointer() : pinnedOutput.addressOfArrayElement(0),
                   capacity,
@@ -263,8 +272,11 @@ final class SvmBackend implements BuffaWire.Backend {
                   limits.maxSlabBytes(),
                   result);
         }
-        long bytes = Buffa.SlabResult.bytes(result);
-        if (status == 6 && attempt == 0 && bytes > capacity && bytes <= limits.maxSlabBytes()) {
+        long bytes = result.bytes();
+        if (status == BuffaConstants.Status.NEEDS_CAPACITY
+            && attempt == 0
+            && bytes > capacity
+            && bytes <= limits.maxSlabBytes()) {
           capacity = Math.toIntExact(bytes);
           if (capacity > limits.criticalBytes()) {
             scratch = true;
@@ -296,7 +308,7 @@ final class SvmBackend implements BuffaWire.Backend {
       throw new IllegalArgumentException("Input is not SVM native memory");
     acquireResult();
     try {
-      VoidPointer result = WordFactory.pointer(resultAddress + SLAB);
+      Buffa.SlabResult result = slabResult();
       for (int attempt = 0; attempt < 2; attempt++) {
         // The native producer writes straight into the heap array the durable message will own:
         // no unmanaged scratch, no direct-buffer wrapper and no second copy per message.
@@ -309,16 +321,19 @@ final class SvmBackend implements BuffaWire.Backend {
                   WordFactory.pointer(compiled),
                   WordFactory.pointer(address.value()),
                   input.size(),
-                  1,
+                  BuffaConstants.DecodeFlags.OWNING,
                   WordFactory.nullPointer(),
                   (CCharPointer) pinned.addressOfArrayElement(0),
                   capacity,
                   limits.maxDepth(),
                   limits.maxSlabBytes(),
                   result);
-          bytes = Buffa.SlabResult.bytes(result);
+          bytes = result.bytes();
         }
-        if (status == 6 && attempt == 0 && bytes > capacity && bytes <= limits.maxSlabBytes()) {
+        if (status == BuffaConstants.Status.NEEDS_CAPACITY
+            && attempt == 0
+            && bytes > capacity
+            && bytes <= limits.maxSlabBytes()) {
           capacity = Math.toIntExact(bytes);
           continue;
         }
@@ -344,15 +359,9 @@ final class SvmBackend implements BuffaWire.Backend {
    * totals; the result slot is read while this backend still holds it.
    */
   static SlabMessage produced(
-      ProtoPlan plan, byte[] output, int extent, SlabLimits limits, VoidPointer result) {
+      ProtoPlan plan, byte[] output, int extent, SlabLimits limits, Buffa.SlabResult result) {
     return SlabMessage.produced(
-        plan,
-        output,
-        extent,
-        Buffa.SlabResult.flags(result),
-        Buffa.SlabResult.cells(result),
-        Buffa.SlabResult.string_bytes(result),
-        limits);
+        plan, output, extent, result.flags(), result.cells(), result.string_bytes(), limits);
   }
 
   // Hooks for the opt-in Myna cells route (truffledata-protobuf-buffa-cells, CellsSvmBackend),
@@ -360,9 +369,9 @@ final class SvmBackend implements BuffaWire.Backend {
   // them; they are unreachable in an image built without -Dtruffledata.buffa.cells=true.
 
   /** Begin one slab decode exactly as {@link #slab} does; returns the slab result slot. */
-  VoidPointer beginSlab() {
+  Buffa.SlabResult beginSlab() {
     acquireResult();
-    return WordFactory.pointer(resultAddress + SLAB);
+    return slabResult();
   }
 
   /** End the slab decode begun by {@link #beginSlab}, as {@link #slab}'s {@code finally} does. */

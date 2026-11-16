@@ -172,7 +172,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
         let target = target.ok_or(MALFORMED)?;
         self.store(self.numbered(ty, 1)?, url.as_bytes())?;
         let i = self.push(self.numbered(ty, 2)?, target as u64, 0)?;
-        self.fields[i].wire = 101;
+        self.fields[i].wire = TYPED_ANY;
         json.at = start;
         if self.mapping(target)? == 0 {
             self.json_object(target, json, depth + 1, true)?;

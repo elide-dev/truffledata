@@ -6,11 +6,12 @@ import dev.elide.truffledata.tape.TypedLayout;
 import dev.elide.truffledata.yaml.cells.generated.YamlCells;
 import dev.elide.truffledata.yaml.cells.generated.YamlCellsTruffle;
 import dev.elide.truffledata.yaml.generated.Yaml;
+import dev.elide.truffledata.yaml.generated.YamlConstants.Status;
 import java.lang.foreign.MemorySegment;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.UnmanagedMemory;
-import org.graalvm.nativeimage.c.type.VoidPointer;
+import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 import org.jspecify.annotations.Nullable;
@@ -108,14 +109,14 @@ final class CellsSvmSessionBackend extends YamlSession.Backend {
 
   /** The static backend's shared-text arena, with {@code session_write_text} through a cell. */
   private final class CellsText extends TapeTextArena {
-    private Pointer table = WordFactory.nullPointer();
+    private CLongPointer table = WordFactory.nullPointer();
 
     CellsText(byte[] bytes) {
       super(bytes);
     }
 
     void write() {
-      VoidPointer output = StackValue.get(Yaml.YamlTextResult.SIZE);
+      Yaml.YamlTextResult output = StackValue.get(Yaml.YamlTextResult.SIZE);
       for (; ; ) {
         int status;
         byte[] bytes = array();
@@ -127,22 +128,22 @@ final class CellsSvmSessionBackend extends YamlSession.Backend {
         } finally {
           pin.close();
         }
-        if (status == 10) {
-          long required = Yaml.YamlTextResult.required_capacity(output);
+        if (status == Status.TEXT_TOO_SMALL) {
+          long required = output.required_capacity();
           if (required > Integer.MAX_VALUE || required <= bytes.length)
             throw new IllegalArgumentException("YAML text arena capacity");
           ensureCapacity((int) required);
           continue;
         }
         YamlStatus.checkStatus(status);
-        table = (Pointer) Yaml.YamlTextResult.table(output);
+        table = output.table();
         return;
       }
     }
 
     @Override
     protected long entry(long node) {
-      return table.readLong(WordFactory.signed(node * Long.BYTES));
+      return table.read(WordFactory.signed(node));
     }
   }
 
@@ -153,7 +154,7 @@ final class CellsSvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected YamlMessage retain() {
-    VoidPointer owned = UnmanagedMemory.calloc(Yaml.YamlResult.SIZE);
+    Yaml.YamlResult owned = UnmanagedMemory.calloc(Yaml.YamlResult.SIZE);
     if (owned.isNull()) {
       reset();
       throw new OutOfMemoryError("YAML retained result allocation");
@@ -161,16 +162,12 @@ final class CellsSvmSessionBackend extends YamlSession.Backend {
     try {
       int status = YamlCellsTruffle.session_retain_Cell.invoke(session, owned.rawValue());
       YamlStatus.checkStatus(status);
-      Pointer descriptor = (Pointer) Yaml.YamlResult.view(owned);
+      Pointer descriptor = (Pointer) owned.view();
       long count = SvmYamlMessage.validate(descriptor);
       return SvmYamlMessage.create(
           descriptor,
           owned.rawValue(),
-          ResultMetadata.read(
-              SvmSessionBackend.MEMORY,
-              owned.rawValue(),
-              count,
-              options.limits().maxAliasExpansion()));
+          SvmSessionBackend.metadata(owned, count, options.limits().maxAliasExpansion()));
     } catch (RuntimeException | Error failure) {
       Yaml.release(owned);
       UnmanagedMemory.free(owned);
@@ -222,7 +219,8 @@ final class CellsSvmSessionBackend extends YamlSession.Backend {
   @Override
   protected int streamNext(long stream) {
     int status = YamlCellsTruffle.stream_next_Cell.invoke(stream, backend.decodeFlags(), result);
-    if (status != 8 && status != 9) SvmSessionBackend.check(status, backend.resultSlot());
+    if (status != Status.STREAM_EMPTY && status != Status.STREAM_TRUNCATED)
+      SvmSessionBackend.check(status, backend.resultSlot());
     return status;
   }
 

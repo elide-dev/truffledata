@@ -4,6 +4,8 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.tape.TapeSink;
 import dev.elide.truffledata.tape.TapeText;
 import dev.elide.truffledata.tape.TapeValue;
+import dev.elide.truffledata.yaml.generated.YamlConstants;
+import dev.elide.truffledata.yaml.generated.YamlConstants.Meta;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
@@ -111,11 +113,11 @@ public final class YamlEmitter {
   }
 
   private static @Nullable KeyKind keyKind(TapeValue key) {
-    return switch ((key.metadataWord() >>> 5) & 7) {
-      case 1 -> KeyKind.NULL;
-      case 2 -> KeyKind.BOOL;
-      case 3 -> KeyKind.INT;
-      case 4 -> KeyKind.FLOAT;
+    return switch ((key.metadataWord() & Meta.KEY_KIND_MASK) >>> Meta.KEY_KIND_SHIFT) {
+      case YamlConstants.KeyKind.NULL -> KeyKind.NULL;
+      case YamlConstants.KeyKind.BOOLEAN -> KeyKind.BOOL;
+      case YamlConstants.KeyKind.INTEGER -> KeyKind.INT;
+      case YamlConstants.KeyKind.FLOATING -> KeyKind.FLOAT;
       default -> null;
     };
   }

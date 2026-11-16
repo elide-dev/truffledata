@@ -20,10 +20,13 @@ import dev.elide.truffledata.json.JsonJvm;
 import dev.elide.truffledata.json.JsonMessage;
 import dev.elide.truffledata.json.JsonPlan;
 import dev.elide.truffledata.json.JsonSession;
+import dev.elide.truffledata.json.generated.JsonConstants;
 import dev.elide.truffledata.json.generated.JsonFFM;
+import dev.elide.truffledata.tape.TapeSession;
 import dev.elide.truffledata.tape.TapeValue;
 import dev.elide.truffledata.tape.TypedAccess;
 import dev.elide.truffledata.tape.TypedArray;
+import dev.elide.truffledata.tape.TypedLayout;
 import dev.elide.truffledata.tape.TypedRecord;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -339,6 +342,33 @@ final class JvmScopedTest {
         () -> JsonPlan.compile(Schema.of(Field.requiredLong("n"))));
   }
 
+  /**
+   * The format-neutral tape layer names the plan and stream protocol once for JSON and YAML
+   * (TypedLayout, TapeSession); json.seam declares the same values for JSON's C ABI. They must agree.
+   */
+  @Test
+  void tapeProtocolMatchesJsonSeam() {
+    assertEquals(JsonConstants.Status.STREAM_EMPTY, TapeSession.STREAM_EMPTY);
+    assertEquals(JsonConstants.Status.STREAM_TRUNCATED, TapeSession.STREAM_TRUNCATED);
+    assertEquals(JsonConstants.MAX_PLAN_DEPTH, TypedLayout.MAX_DEPTH);
+    assertEquals(JsonConstants.MAX_PLAN_RECORDS, TypedLayout.MAX_RECORDS);
+    assertEquals(JsonConstants.MAX_RECORD_FIELDS, TypedLayout.MAX_FIELDS);
+    assertEquals(JsonConstants.NO_CHILD, TypedLayout.NO_CHILD);
+    assertEquals(JsonConstants.FieldKind.BOOLEAN, TypedLayout.KIND_BOOLEAN);
+    assertEquals(JsonConstants.FieldKind.INT64, TypedLayout.KIND_INT64);
+    assertEquals(JsonConstants.FieldKind.UINT64, TypedLayout.KIND_UINT64);
+    assertEquals(JsonConstants.FieldKind.FLOAT64, TypedLayout.KIND_FLOAT64);
+    assertEquals(JsonConstants.FieldKind.STRING, TypedLayout.KIND_STRING);
+    assertEquals(JsonConstants.FieldKind.RECORD, TypedLayout.KIND_RECORD);
+    assertEquals(JsonConstants.FieldFlags.REQUIRED, TypedLayout.FLAG_REQUIRED);
+    assertEquals(JsonConstants.FieldFlags.NULLABLE, TypedLayout.FLAG_NULLABLE);
+    assertEquals(JsonConstants.FieldFlags.REPEATED, TypedLayout.FLAG_REPEATED);
+    assertEquals(JsonConstants.LengthUnit.UNCONSTRAINED, TypedLayout.LENGTH_UNCONSTRAINED);
+    assertEquals(JsonConstants.LengthUnit.UTF16, TypedLayout.LENGTH_UTF16);
+    assertEquals(JsonConstants.LengthUnit.SCALAR_VALUES, TypedLayout.LENGTH_SCALAR_VALUES);
+    assertEquals(JsonConstants.CRITICAL_LIMIT, JsonSession.CRITICAL_LIMIT);
+  }
+
   // Typed plans: mirrors SvmAcceptance.typed(), schemaTyped(), accessorContracts() and nested().
 
   /** Generated FFM layouts and handles drive the raw typed ABI exactly as the SVM bindings do. */
@@ -359,27 +389,38 @@ final class JvmScopedTest {
       try {
         fields.set(ValueLayout.ADDRESS, JsonFFM.JsonScalarField_name_OFFSET, arena.allocateFrom("n"));
         fields.set(ValueLayout.JAVA_LONG, JsonFFM.JsonScalarField_name_length_OFFSET, 1);
-        fields.set(ValueLayout.JAVA_INT, JsonFFM.JsonScalarField_kind_OFFSET, 1);
-        fields.set(ValueLayout.JAVA_INT, JsonFFM.JsonScalarField_flags_OFFSET, 1);
+        fields.set(
+            ValueLayout.JAVA_INT,
+            JsonFFM.JsonScalarField_kind_OFFSET,
+            JsonConstants.FieldKind.INT64);
+        fields.set(
+            ValueLayout.JAVA_INT,
+            JsonFFM.JsonScalarField_flags_OFFSET,
+            JsonConstants.FieldFlags.REQUIRED);
         fields.set(ValueLayout.JAVA_LONG, JsonFFM.JsonScalarField_minimum_OFFSET, -128);
         fields.set(ValueLayout.JAVA_LONG, JsonFFM.JsonScalarField_maximum_OFFSET, 127);
-        fields.set(ValueLayout.JAVA_INT, JsonFFM.JsonScalarField_child_OFFSET, -1);
+        fields.set(
+            ValueLayout.JAVA_INT, JsonFFM.JsonScalarField_child_OFFSET, JsonConstants.NO_CHILD);
         records.set(ValueLayout.JAVA_INT, JsonFFM.JsonRecordPlan_field_count_OFFSET, 1);
-        assertEquals(0, (int) create.invokeExact(records, 1L, fields, 1L, 1L, plan));
+        assertEquals(
+            JsonConstants.Status.OK, (int) create.invokeExact(records, 1L, fields, 1L, 1L, plan));
         byte[] input = utf8("{\"n\":127}");
         MemorySegment data = arena.allocate(input.length);
         MemorySegment.copy(input, 0, data, ValueLayout.JAVA_BYTE, 0, input.length);
         assertEquals(
-            0, (int) decode.invokeExact(plan, data, (long) input.length, 1024L, 1024L, result));
+            JsonConstants.Status.OK,
+            (int) decode.invokeExact(plan, data, (long) input.length, 1024L, 1024L, result));
         planRelease.invokeExact(plan);
         assertEquals(1, result.get(ValueLayout.JAVA_LONG, JsonFFM.JsonTypedResult_present_OFFSET));
         assertEquals(0, result.get(ValueLayout.JAVA_LONG, JsonFFM.JsonTypedResult_nulls_OFFSET));
         assertEquals(1, result.get(ValueLayout.JAVA_LONG, JsonFFM.JsonTypedResult_count_OFFSET));
-        MemorySegment slots =
-            result
-                .get(ValueLayout.ADDRESS, JsonFFM.JsonTypedResult_slots_OFFSET)
-                .reinterpret(JsonFFM.JsonScalarSlot_LAYOUT.byteSize());
-        assertEquals(127, slots.get(ValueLayout.JAVA_LONG, JsonFFM.JsonScalarSlot_bits_OFFSET));
+        // The counted view JsonTypedResult.slots/count.
+        MemorySegment slots = JsonFFM.JsonTypedResult_slots(result);
+        assertEquals(JsonFFM.JsonScalarSlot_LAYOUT.byteSize(), slots.byteSize());
+        assertEquals(
+            127,
+            JsonFFM.JsonTypedResult_slots_at(slots, 0)
+                .get(ValueLayout.JAVA_LONG, JsonFFM.JsonScalarSlot_bits_OFFSET));
         assertEquals(
             1, result.get(ValueLayout.JAVA_LONG, JsonFFM.JsonTypedResult_index_allocations_OFFSET));
         release.invokeExact(result);

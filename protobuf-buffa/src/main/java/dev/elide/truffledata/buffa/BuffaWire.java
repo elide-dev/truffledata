@@ -3,6 +3,7 @@ package dev.elide.truffledata.buffa;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.buffa.generated.Buffa;
+import dev.elide.truffledata.buffa.generated.BuffaConstants;
 import dev.elide.truffledata.buffa.generated.BuffaFFM;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.ProtoRow;
@@ -62,7 +63,7 @@ public final class BuffaWire implements AutoCloseable {
 
     /** Write into a caller-owned native arena. Negative results request that exact capacity. */
     default int writeSlab(Object compiled, WireInput input, WireInput output, SlabLimits limits) {
-      return writeSlab(compiled, input, output, limits, 1, null);
+      return writeSlab(compiled, input, output, limits, BuffaConstants.DecodeFlags.OWNING, null);
     }
 
     int writeSlab(
@@ -167,7 +168,7 @@ public final class BuffaWire implements AutoCloseable {
     check();
     Objects.requireNonNull(limits);
     if (maxDepth < 1
-        || maxDepth > 128
+        || maxDepth > BuffaConstants.MAX_DEPTH
         || maxWireBytes < 0
         || maxNativeBytes < 0
         || input.size() > maxWireBytes) throw new ContractViolation("Invalid wire budgets");
@@ -240,13 +241,15 @@ public final class BuffaWire implements AutoCloseable {
         throw new IllegalStateException("Invalid native field index");
       Object decoded =
           switch (wire) {
-            case 0, 1 ->
+            case BuffaConstants.WireType.VARINT, BuffaConstants.WireType.FIXED64 ->
                 value >= 0
                     ? value
                     : Values.normalize(BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63));
-            case 5 -> value;
-            case 2 -> new BorrowedBytes(message, Math.toIntExact(value), length);
-            case 3 -> materialize(message, tape, index + 1, next, limits);
+            case BuffaConstants.WireType.FIXED32 -> value;
+            case BuffaConstants.WireType.LENGTH_DELIMITED ->
+                new BorrowedBytes(message, Math.toIntExact(value), length);
+            case BuffaConstants.WireType.START_GROUP ->
+                materialize(message, tape, index + 1, next, limits);
             default -> throw new IllegalStateException("Invalid native wire type");
           };
       limits.check(1, 3);
@@ -272,10 +275,12 @@ public final class BuffaWire implements AutoCloseable {
   }
 
   static void status(int code) {
-    if (code == 1) throw new ContractViolation("Malformed protobuf input");
-    if (code == 2)
+    if (code == BuffaConstants.Status.MALFORMED)
+      throw new ContractViolation("Malformed protobuf input");
+    if (code == BuffaConstants.Status.BUDGET)
       throw new ContractViolation("Buffa structural or native allocation budget exceeded");
-    if (code != 0) throw new IllegalStateException("Buffa decoder failure: " + code);
+    if (code != BuffaConstants.Status.OK)
+      throw new IllegalStateException("Buffa decoder failure: " + code);
   }
 
   /** Decoder-owned typed-index scratch, consumed synchronously before its next use. */

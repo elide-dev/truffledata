@@ -86,7 +86,7 @@ class PolicyTest {
             // folded into TapeOwner.find behind the miss boundary (V1: 26 -> 25).
             Map.entry("TapeValue.java", 27), // + members(): linear member walk for the YAML emitter (#42)
             Map.entry("TapeBorrow.java", 1), // Borrowed-result assumption.
-            Map.entry("TapeExportNode.java", 1), // Cold fallback for heterogeneous export owners.
+            Map.entry("TapeExportNode.java", 3), // Cold fallback; two slow-path error messages.
             // Key preparation from a String or from Myna's prepared Utf8Key (V1: 1 -> 2).
             Map.entry("TapeKey.java", 2),
             Map.entry(
@@ -240,6 +240,11 @@ class PolicyTest {
     String policy = Files.readString(root.resolve("bazel/java.bzl"));
     assertTrue(policy.contains("-Xep:NullAway:ERROR"));
     assertTrue(policy.contains("-XepOpt:NullAway:JSpecifyMode=true"));
-    assertTrue(policy.contains("plugins = plugins + [\"//bazel:nullaway\"]"));
+    assertTrue(
+        policy.contains("plugins = plugins + [\"//bazel:nullaway\", \"//bazel:trufflecheck\"]"));
+    assertTrue(policy.contains("javacopts = NULLAWAY_OPTS + TRUFFLECHECK_OPTS"));
+    assertTrue(
+        policy.contains("-XepOpt:Trufflecheck:Policy=bazel/trufflecheck/trufflecheck.properties"));
+    assertTrue(policy.contains("-Xep:TruffleMissingBoundary:ERROR"));
   }
 }

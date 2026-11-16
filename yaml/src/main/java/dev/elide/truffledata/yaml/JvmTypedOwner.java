@@ -42,8 +42,9 @@ final class JvmTypedOwner extends TypedOwner {
         || slotCount > Long.MAX_VALUE / SLOT_SIZE
         || recordCount > Long.MAX_VALUE / ENTRY_SIZE)
       throw new IllegalStateException("YAML typed result tables missing");
-    this.slots = slotTable.reinterpret(slotCount * SLOT_SIZE);
-    this.records = recordTable.reinterpret(recordCount * ENTRY_SIZE);
+    // The counted views: count elements each, read-only (still the exact native segment class).
+    this.slots = YamlFFM.YamlTypedResult_slots(result);
+    this.records = YamlFFM.YamlTypedResult_records(result);
     this.release = release;
   }
 
@@ -78,20 +79,17 @@ final class JvmTypedOwner extends TypedOwner {
 
   @Override
   protected String text(long slot) {
-    return copyText(slots, slot * SLOT_SIZE);
+    return copyText(slots, slot);
   }
 
   @TruffleBoundary
-  private static String copyText(MemorySegment slots, long offset) {
-    long length =
-        slots.get(ValueLayout.JAVA_LONG, offset + YamlFFM.YamlScalarSlot_text_length_OFFSET);
+  private static String copyText(MemorySegment slots, long index) {
+    MemorySegment slot = YamlFFM.YamlTypedResult_slots_at(slots, index);
+    long length = YamlFFM.YamlScalarSlot_text_count(slot);
     if (length < 0 || length > Integer.MAX_VALUE - 8)
       throw new IllegalStateException("YAML typed text length");
-    MemorySegment text =
-        slots
-            .get(ValueLayout.ADDRESS, offset + YamlFFM.YamlScalarSlot_text_OFFSET)
-            .reinterpret(length);
-    return new String(text.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
+    return new String(
+        YamlFFM.YamlScalarSlot_text(slot).toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
   }
 
   @Override

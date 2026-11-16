@@ -134,6 +134,8 @@ final class IndexScan {
    * Per-thread index buffer: at most the largest capacity a provider asked for (64 Ki entries,
    * 256 KiB, for the shipped providers), kept for the thread's lifetime.
    */
+  // Per-thread scratch arrays (reused allocations); no context, engine or guest state.
+  @SuppressWarnings("TruffleStaticContextState")
   private static final ThreadLocal<int @Nullable []> SHARED = new ThreadLocal<>();
 
   /**

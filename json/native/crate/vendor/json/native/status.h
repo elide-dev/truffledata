@@ -1,7 +1,9 @@
 #ifndef TRUFFLEDATA_JSON_STATUS_H
 #define TRUFFLEDATA_JSON_STATUS_H
-// C++ mirror of the td_json_status codes (api.h; api.cc asserts they agree) and the one mapping
-// from decoder exceptions and simdjson errors to them, shared by the C ABI and the stream.
+// C++ names of the json.seam `Status` codes (generated seam.h; api.h aliases them as TD_JSON_*)
+// and the one mapping from decoder exceptions and simdjson errors to them, shared by the C ABI and
+// the stream. Every value is the generated one: there is no second copy of a number here.
+#include "json/native/generated/seam.h"
 #include <simdjson.h>
 #include <cstdint>
 #include <new>
@@ -10,18 +12,18 @@
 namespace truffledata::json {
 
 enum status : int32_t {
-  status_ok = 0,
-  status_argument = 1,
-  status_limit = 2,
-  status_allocation = 3,
-  status_syntax = 4,
-  status_internal = 5,
-  status_contract = 6,
-  status_text_too_small = 7,
+  status_ok = TRUFFLEDATA_JSON_STATUS_OK,
+  status_argument = TRUFFLEDATA_JSON_STATUS_ARGUMENT,
+  status_limit = TRUFFLEDATA_JSON_STATUS_LIMIT,
+  status_allocation = TRUFFLEDATA_JSON_STATUS_ALLOCATION,
+  status_syntax = TRUFFLEDATA_JSON_STATUS_SYNTAX,
+  status_internal = TRUFFLEDATA_JSON_STATUS_INTERNAL,
+  status_contract = TRUFFLEDATA_JSON_STATUS_CONTRACT,
+  status_text_too_small = TRUFFLEDATA_JSON_STATUS_TEXT_TOO_SMALL,
   // Streams (stream.h): no complete document is buffered, and the finished input ended inside one.
   // The values match TD_YAML_STREAM_EMPTY/TD_YAML_STREAM_TRUNCATED (one stream contract).
-  status_stream_empty = 8,
-  status_stream_truncated = 9,
+  status_stream_empty = TRUFFLEDATA_JSON_STATUS_STREAM_EMPTY,
+  status_stream_truncated = TRUFFLEDATA_JSON_STATUS_STREAM_TRUNCATED,
 };
 
 inline int32_t status_of(simdjson::error_code error) noexcept {

@@ -11,7 +11,6 @@ import java.util.List;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.UnmanagedMemory;
-import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.WordFactory;
@@ -122,8 +121,8 @@ public final class DecodeProbe implements AutoCloseable {
   }
 
   private int decode(long input, int length, long output, boolean leaf) {
-    VoidPointer slot = WordFactory.pointer(result + Buffa.Result.SIZE);
-    CCharPointer layout = WordFactory.pointer(compiled);
+    Buffa.SlabResult slot = WordFactory.pointer(result + Buffa.Result.SIZE);
+    Buffa.Layout layout = WordFactory.pointer(compiled);
     int status =
         leaf
             ? Buffa.decodeSlabSmall(
@@ -148,7 +147,7 @@ public final class DecodeProbe implements AutoCloseable {
                 limits.maxDepth(),
                 limits.maxSlabBytes(),
                 slot);
-    long bytes = Buffa.SlabResult.bytes(slot);
+    long bytes = slot.bytes();
     if (status != 0 || bytes <= 0 || bytes > capacity)
       throw new IllegalStateException("Probe decode failed: status " + status);
     return (int) bytes;

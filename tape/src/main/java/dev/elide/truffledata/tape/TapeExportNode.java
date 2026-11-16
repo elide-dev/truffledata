@@ -119,7 +119,7 @@ public final class TapeExportNode extends Node {
       if (tag == ValueTape.OBJECT || tag == ValueTape.ARRAY) {
         if (depth == MAX_DEPTH) {
           CompilerDirectives.transferToInterpreter();
-          throw new IllegalStateException(owner.format().name + " export depth limit");
+          throw depthLimit(owner);
         }
         int field = TapeReader.field(word);
         long count = field == TapeReader.MAX_COUNT ? tape.length(cursor) : field;
@@ -150,11 +150,22 @@ public final class TapeExportNode extends Node {
         }
         default -> {
           CompilerDirectives.transferToInterpreter();
-          throw new IllegalStateException("Unknown " + owner.format().name + " node kind");
+          throw unknownKind(owner);
         }
       }
       cursor = TapeReader.step(cursor, word);
       expectKey = depth > 0 && ends[depth - 1] < 0;
     }
+  }
+
+  // Slow-path messages, kept out of loop so host compilation does not inline the string building.
+  @TruffleBoundary
+  private static IllegalStateException depthLimit(TapeOwner owner) {
+    return new IllegalStateException(owner.format().name + " export depth limit");
+  }
+
+  @TruffleBoundary
+  private static IllegalStateException unknownKind(TapeOwner owner) {
+    return new IllegalStateException("Unknown " + owner.format().name + " node kind");
   }
 }

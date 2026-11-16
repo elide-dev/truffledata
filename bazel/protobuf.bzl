@@ -2,7 +2,7 @@
 
 load("@protobuf//bazel/common:proto_info.bzl", "ProtoInfo")
 load("@rules_java//java:defs.bzl", "java_library")
-load("//bazel:java.bzl", "NULLAWAY_OPTS")
+load("//bazel:java.bzl", "NULLAWAY_OPTS", "TRUFFLECHECK_OPTS")
 
 def _generate(ctx):
     relative = ctx.attr.java_package.replace(".", "/") + "/" + ctx.attr.class_name + ".java"
@@ -74,8 +74,8 @@ def proto_contract_library(name, srcs = [], proto_path = "", java_package = "dev
             Label("@maven//:org_jspecify_jspecify"),
             Label("//bazel:truffle_processor"),
         ],
-        plugins = [Label("//bazel:nullaway")],
-        javacopts = NULLAWAY_OPTS,
+        plugins = [Label("//bazel:nullaway"), Label("//bazel:trufflecheck")],
+        javacopts = NULLAWAY_OPTS + TRUFFLECHECK_OPTS,
         testonly = testonly,
         visibility = visibility,
     )

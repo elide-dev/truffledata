@@ -65,7 +65,8 @@ public final class StockParseProbe {
         var message = Timestamp.parseFrom(wire);
         return message.getSeconds() + message.getNanos();
       } catch (InvalidProtocolBufferException invalid) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
+        // The probe's input is always valid; an invalid one is a fatal probe error.
+        CompilerDirectives.transferToInterpreter();
         throw invalidInput(invalid);
       }
     }

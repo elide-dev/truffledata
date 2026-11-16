@@ -136,6 +136,9 @@ maven.install(
         "com.uber.nullaway:nullaway:0.14.2",
         "com.google.errorprone:error_prone_core:2.50.0",
         "com.google.errorprone:error_prone_type_annotations:2.37.0",
+        # Truffle/Native Image Error Prone rules (//bazel:trufflecheck); same release as the
+        # third_party/trufflecheck submodule, which carries the agent skill and profiles.
+        "dev.elide:trufflecheck-errorprone:0.1.1",
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",
         "com.h2database:h2:2.3.232",
@@ -172,6 +175,7 @@ maven.install(
     repositories = [
         "https://repo.maven.apache.org/maven2",
         "https://maven.elide.dev/gvm-elide/" + GRAALVM,
+        "https://maven.elide.dev",
     ],
 )
 
@@ -353,13 +357,15 @@ cc_library(
 )
 use_repo(crate, "crates", simdutf_src = "crates__simdutf-0.7.0")
 
+# TEMPORARY: Myna's unreleased stack tip (elide-dev/myna#148, 915c5e9e), adopted ahead of its release
+# for feedback. Must be replaced by the released source tarball before truffledata releases.
 http_archive(
     name = "myna",
     build_file = "//bazel:myna.BUILD",
-    sha256 = "1085ddbca29687eb9c2992cc80acdb4f8546e18022d48c09c4252e56bc1c8f3e",
-    strip_prefix = "myna-0.18.0",
+    sha256 = "4c5080203903f2738f0e5589ea41d3d144f49148fcd139bdea76d7da19ede0dc",
+    strip_prefix = "myna-915c5e9ea9ef1e83fdcfac8f6873bb6cdfc7aaff",
     type = "tar.gz",
-    urls = ["https://github.com/elide-dev/myna/releases/download/v0.18.0/myna-source-0.18.0.tar.gz"],
+    urls = ["https://github.com/elide-dev/myna/archive/915c5e9ea9ef1e83fdcfac8f6873bb6cdfc7aaff.tar.gz"],
 )
 
 # Production JSON adapter: match the parser qualified by Myna's value ABI tests.
