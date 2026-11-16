@@ -205,9 +205,9 @@ extern "C" YamlSession* td_yaml_session_create(const YamlOptionsStruct* options)
 
 extern "C" truffledata_yaml_status_t td_yaml_session_decode(YamlSession* handle, const uint8_t* data, uint64_t length,
                                                             truffledata_yaml_decode_flags_t flags, uint8_t* text_out,
-                                                            uint64_t text_capacity, YamlResult* output) {
+                                                            uint64_t text_capacity, void* output) {
   if (!handle || !aligned(output)) return TD_YAML_ARGUMENT;
-  auto& result = *output;
+  auto& result = *static_cast<YamlResult*>(output);
   result = {};
   if (!data || (flags & ~uint32_t(TD_YAML_RETAIN_SOURCE | TD_YAML_WANT_DIRECTORIES)) || text_out || text_capacity) {
     message(result, "invalid YAML decode arguments", 29);
@@ -313,9 +313,9 @@ extern "C" void td_yaml_stream_finish(YamlStream* handle) {
 }
 
 extern "C" truffledata_yaml_status_t td_yaml_stream_next(YamlStream* handle, truffledata_yaml_decode_flags_t flags,
-                                                         YamlResult* output) {
+                                                         void* output) {
   if (!handle || !aligned(output)) return TD_YAML_ARGUMENT;
-  auto& result = *output;
+  auto& result = *static_cast<YamlResult*>(output);
   result = {};
   if (flags & ~uint32_t(TD_YAML_RETAIN_SOURCE | TD_YAML_WANT_DIRECTORIES)) return TD_YAML_ARGUMENT;
   auto& st = stream(handle);

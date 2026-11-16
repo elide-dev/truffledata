@@ -17,6 +17,7 @@ import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CLongPointer;
+import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 import org.jspecify.annotations.Nullable;
@@ -104,6 +105,9 @@ final class SvmSessionBackend extends YamlSession.Backend {
     return result;
   }
 
+  // session_decode's and stream_next's result stay ptr<void> in yaml.seam (see there): the typed
+  // result slot is passed as a VoidPointer, the same address.
+
   /** The flags every decode of this backend passes: the same expression as its own calls. */
   int decodeFlags() {
     return (options.retainSource() ? DecodeFlags.RETAIN_SOURCE : 0)
@@ -126,7 +130,7 @@ final class SvmSessionBackend extends YamlSession.Backend {
               decodeFlags(),
               WordFactory.nullPointer(),
               0,
-              result);
+              (VoidPointer) result);
     }
     check(status, result);
     if (text != null) ((NativeText) text).write(session);
@@ -320,7 +324,7 @@ final class SvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected int streamNext(long stream) {
-    int status = Yaml.stream_next(WordFactory.pointer(stream), decodeFlags(), result);
+    int status = Yaml.stream_next(WordFactory.pointer(stream), decodeFlags(), (VoidPointer) result);
     if (status != Status.STREAM_EMPTY && status != Status.STREAM_TRUNCATED) check(status, result);
     return status;
   }

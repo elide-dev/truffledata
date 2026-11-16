@@ -192,7 +192,10 @@ import session_decode symbol=td_yaml_session_decode return=i32 enum=Status error
   param flags type=u32 flags=DecodeFlags
   param text_out type=ptr<u8> nullable=true ownership=borrowed access=read_write
   param text_capacity type=u64
-  param result type=ptr<YamlResult> nullable=false ownership=borrowed access=read_write
+  # ptr<void>, not ptr<YamlResult>: this call overwrites a caller struct with a borrowed result.
+  # Typed, Truffle cells would accept a retained YamlResult owner here (YamlResult is a cells
+  # resource) and the call would leak it; Myna cannot yet refuse an owner on a typed pointer.
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
 struct YamlTextResult size=24 align=8
   field table type=ptr<u64> offset=0
@@ -231,7 +234,10 @@ end
 import stream_next symbol=td_yaml_stream_next return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
   param stream type=ptr<YamlStream> nullable=false ownership=borrowed access=read_write
   param flags type=u32 flags=DecodeFlags
-  param result type=ptr<YamlResult> nullable=false ownership=borrowed access=read_write
+  # ptr<void>, not ptr<YamlResult>: this call overwrites a caller struct with a borrowed result.
+  # Typed, Truffle cells would accept a retained YamlResult owner here (YamlResult is a cells
+  # resource) and the call would leak it; Myna cannot yet refuse an owner on a typed pointer.
+  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
 end
 import stream_release symbol=td_yaml_stream_release return=void error=no_failure native_leaf=false@explicit_contract
   param stream type=ptr<YamlStream> nullable=false ownership=borrowed access=read_write

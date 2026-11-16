@@ -618,6 +618,12 @@ final class CellsJvmTest {
           assertInstanceOf(NativeResource.class, retain.execute(new Object[] {session, NativeBytes.of(retained, true)}));
       assertEquals("YamlResult", result.type());
       assertEquals(expected, tape(retained));
+      // The overwritten results of session_decode and stream_next stay ptr<void> in yaml.seam, so
+      // they refuse a retained result's owner, which the call would otherwise overwrite and leak.
+      assertThrows(
+          NativeCellException.class,
+          () -> decode.executeInt(new Object[] {session, new HeapBytes(yaml, false), 0, null, result}));
+      assertEquals(expected, tape(retained), "the retained result is untouched");
 
       // A stream holds its session open; a retained result does not.
       NativeResource stream =
@@ -625,6 +631,8 @@ final class CellsJvmTest {
       byte[] documents = "x: 1\n---\ny: [2]\n".getBytes(StandardCharsets.UTF_8);
       assertEquals(documents.length, feed.executeLong(new Object[] {stream, new HeapBytes(documents, false)}));
       finish.execute(new Object[] {stream});
+      assertThrows(NativeCellException.class, () -> next.executeInt(new Object[] {stream, 0, result}));
+      assertEquals(expected, tape(retained), "the retained result is untouched");
       MemorySegment out = arena.allocate(YamlFFM.YamlResult_LAYOUT);
       assertEquals(0, next.executeInt(new Object[] {stream, 0, NativeBytes.of(out, true)}));
       assertNotEquals("no view", tape(out));
