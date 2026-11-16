@@ -15,8 +15,8 @@ using truffledata::yaml::error;
 using yaml_session = truffledata::yaml::session;
 
 // The seam's opaque handles are the session and stream objects themselves.
-yaml_session& session(YamlSession* handle) { return *reinterpret_cast<yaml_session*>(handle); }
-truffledata::yaml::stream& stream(YamlStream* handle) {
+yaml_session& session_of(YamlSession* handle) { return *reinterpret_cast<yaml_session*>(handle); }
+truffledata::yaml::stream& stream_of(YamlStream* handle) {
   return *reinterpret_cast<truffledata::yaml::stream*>(handle);
 }
 YamlSession* as_handle(yaml_session* s) { return reinterpret_cast<YamlSession*>(s); }
@@ -213,7 +213,7 @@ extern "C" truffledata_yaml_status_t td_yaml_session_decode(YamlSession* handle,
     message(result, "invalid YAML decode arguments", 29);
     return TD_YAML_ARGUMENT;
   }
-  auto& s = session(handle);
+  auto& s = session_of(handle);
   if (length > UINT32_MAX || length > s.options().storage.input_bytes) {
     message(result, "YAML resource limit: input bytes", 32);
     return TD_YAML_LIMIT;
@@ -233,7 +233,7 @@ extern "C" truffledata_yaml_status_t td_yaml_session_write_text(YamlSession* han
   if (!handle || !aligned(output)) return TD_YAML_ARGUMENT;
   auto& result = *output;
   result = {};
-  auto& s = session(handle);
+  auto& s = session_of(handle);
   if (!s.live() || (!text_out && capacity != 0) || (reinterpret_cast<uintptr_t>(text_out) & 1))
     return TD_YAML_ARGUMENT;
   try {
@@ -255,7 +255,7 @@ extern "C" truffledata_yaml_status_t td_yaml_session_retain(YamlSession* handle,
   if (!handle || !aligned(output)) return TD_YAML_ARGUMENT;
   auto& result = *output;
   if (result.owner || result.view) return TD_YAML_ARGUMENT;
-  auto& s = session(handle);
+  auto& s = session_of(handle);
   if (!s.live()) return TD_YAML_ARGUMENT;
   // Read before retain: the session forgets the document once its storage moves.
   auto d = s.current(s.input_length(), 0);
@@ -282,7 +282,7 @@ extern "C" truffledata_yaml_status_t td_yaml_session_retain(YamlSession* handle,
 }
 
 extern "C" void td_yaml_session_reset(YamlSession* handle) {
-  if (handle) session(handle).reset();
+  if (handle) session_of(handle).reset();
 }
 
 extern "C" void td_yaml_session_release(YamlSession* handle) { delete reinterpret_cast<yaml_session*>(handle); }
@@ -292,7 +292,7 @@ extern "C" void td_yaml_session_release(YamlSession* handle) { delete reinterpre
 extern "C" YamlStream* td_yaml_stream_create(YamlSession* handle, uint64_t max_document_bytes, uint64_t buffer_bytes) {
   if (!handle || max_document_bytes == 0 || max_document_bytes > UINT32_MAX) return nullptr;
   try {
-    return as_handle(new truffledata::yaml::stream(session(handle), size_t(max_document_bytes),
+    return as_handle(new truffledata::yaml::stream(session_of(handle), size_t(max_document_bytes),
                                                 size_t(buffer_bytes < (uint64_t(1) << 40) ? buffer_bytes : uint64_t(1) << 40)));
   } catch (...) {
     return nullptr;
@@ -302,14 +302,14 @@ extern "C" YamlStream* td_yaml_stream_create(YamlSession* handle, uint64_t max_d
 extern "C" uint64_t td_yaml_stream_feed(YamlStream* handle, const uint8_t* data, uint64_t length) {
   if (!handle || (!data && length)) return 0;
   try {
-    return stream(handle).feed(data, size_t(length));
+    return stream_of(handle).feed(data, size_t(length));
   } catch (...) {
     return 0;  // allocation failure: nothing accepted
   }
 }
 
 extern "C" void td_yaml_stream_finish(YamlStream* handle) {
-  if (handle) stream(handle).finish();
+  if (handle) stream_of(handle).finish();
 }
 
 extern "C" truffledata_yaml_status_t td_yaml_stream_next(YamlStream* handle, truffledata_yaml_decode_flags_t flags,
@@ -318,7 +318,7 @@ extern "C" truffledata_yaml_status_t td_yaml_stream_next(YamlStream* handle, tru
   auto& result = *static_cast<YamlResult*>(output);
   result = {};
   if (flags & ~uint32_t(TD_YAML_RETAIN_SOURCE | TD_YAML_WANT_DIRECTORIES)) return TD_YAML_ARGUMENT;
-  auto& st = stream(handle);
+  auto& st = stream_of(handle);
   yaml_session::document_view d;
   int32_t status = st.next(&d, ((flags & TD_YAML_RETAIN_SOURCE) ? yaml_session::retain_source : 0) |
       ((flags & TD_YAML_WANT_DIRECTORIES) ? yaml_session::want_directories : 0));
