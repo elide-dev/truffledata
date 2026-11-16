@@ -27,6 +27,7 @@ class PolicyTest {
             // Name lookup, plus the two accessor-table lookups (Task B2), taken on specialization
             // and host slow paths only.
             Map.entry("Schema.java", 3),
+            Map.entry("DynamicRecord.java", 1), // Cold duplicate-label rejection message.
             // Node-side accessor binding, strict-mode audit and the uncached interop array length
             // (Task B2); compiled accessor reads cross none of them.
             Map.entry("Accessor.java", 3),
