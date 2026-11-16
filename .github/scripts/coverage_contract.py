@@ -169,24 +169,23 @@ SVM_ONLY_METHODS = {
     **_yaml_methods('SvmSessionBackend',
         # Hooks read by the cells route's static backend (//yaml/cells, CellsSvmSessionBackend);
         # //yaml/cells/tests:native_test runs them in an image built with the flag.
-        'SvmSessionBackend::sessionHandle ()Lorg/graalvm/nativeimage/c/type/VoidPointer;',
-        'SvmSessionBackend::resultSlot ()Lorg/graalvm/nativeimage/c/type/VoidPointer;',
+        'SvmSessionBackend::sessionHandle ()Ldev/elide/truffledata/yaml/generated/Yaml$YamlSession;',
+        'SvmSessionBackend::resultSlot ()Ldev/elide/truffledata/yaml/generated/Yaml$YamlResult;',
         'SvmSessionBackend::decodeFlags ()I',
         'SvmSessionBackend::compile (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan;',
-        'SvmSessionBackend::writeOptions (Lorg/graalvm/word/Pointer;Ldev/elide/truffledata/yaml/YamlOptions;)V',
-        'SvmSessionBackend::checkTyped (ILorg/graalvm/nativeimage/c/type/VoidPointer;)V',
-        'SvmSessionBackend$1::integer (JJ)I',
-        'SvmSessionBackend$1::octet (JJ)B',
-        'SvmSessionBackend$1::pointer (JI)J',
-        'SvmSessionBackend$1::word (JJ)J',
-        'SvmSessionBackend$2::run ()V',
+        'SvmSessionBackend::writeOptions (Ldev/elide/truffledata/yaml/generated/Yaml$YamlOptionsStruct;Ldev/elide/truffledata/yaml/YamlOptions;)V',
+        'SvmSessionBackend::checkTyped (ILdev/elide/truffledata/yaml/generated/Yaml$YamlTypedResult;)V',
         'SvmSessionBackend$Storage::inputByte (J)B',
         'SvmSessionBackend$Storage::run ()V',
         'SvmSessionBackend$Storage::span (J)J',
         'SvmSessionBackend$NativeText::entry (J)J',
-        'SvmSessionBackend$NativeText::write (Lorg/graalvm/nativeimage/c/type/VoidPointer;)V',
+        'SvmSessionBackend$NativeText::write (Ldev/elide/truffledata/yaml/generated/Yaml$YamlSession;)V',
         'SvmSessionBackend::borrow ()Ldev/elide/truffledata/tape/TapeBorrow;',
-        'SvmSessionBackend::check (ILorg/graalvm/nativeimage/c/type/VoidPointer;)V',
+        'SvmSessionBackend::check (ILdev/elide/truffledata/yaml/generated/Yaml$YamlResult;)V',
+        # Readers of a native result's message, metadata tables and text (generated record accessors).
+        'SvmSessionBackend::message (Lorg/graalvm/nativeimage/c/type/CCharPointer;I)Ljava/lang/String;',
+        'SvmSessionBackend::metadata (Ldev/elide/truffledata/yaml/generated/Yaml$YamlResult;JJ)Ldev/elide/truffledata/yaml/YamlMetadata;',
+        'SvmSessionBackend::text (Ldev/elide/truffledata/yaml/generated/Yaml$YamlResult;II)Ljava/lang/String;',
         'SvmSessionBackend::directories (Z)V',
         'SvmSessionBackend::decode (Ljava/lang/foreign/MemorySegment;J)V',
         'SvmSessionBackend::decode ([BIIILdev/elide/truffledata/tape/TapeTextArena;)V',
@@ -200,7 +199,7 @@ SVM_ONLY_METHODS = {
         'SvmSessionBackend::streamFinish (J)V',
         'SvmSessionBackend::streamNext (J)I',
         'SvmSessionBackend::streamRelease (J)V',
-        'SvmSessionBackend::tape (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/SvmTape;',
+        'SvmSessionBackend::tape (Ldev/elide/truffledata/yaml/generated/Yaml$YamlResult;)Ldev/elide/truffledata/tape/SvmTape;',
         'SvmSessionBackend::textArena ([B)Ldev/elide/truffledata/tape/TapeTextArena;'),
     **_yaml_methods('SvmYamlMessage',
         'SvmYamlMessage::validate (Lorg/graalvm/word/Pointer;)J',
@@ -228,7 +227,7 @@ SVM_ONLY_METHODS = {
     # session backend of the runtime (the Java kernel on the JVM test class path).
     **_yaml_methods('SvmPlanBackend',
         # Hook read by the cells route's static plan (//yaml/cells, CellsSvmPlanBackend).
-        'SvmPlanBackend::handle ()Lorg/graalvm/nativeimage/c/type/VoidPointer;',
+        'SvmPlanBackend::handle ()Ldev/elide/truffledata/yaml/generated/Yaml$YamlPlan;',
         'SvmPlanBackend::create (Ldev/elide/truffledata/tape/TypedLayout;Ldev/elide/truffledata/yaml/YamlOptions;)Ldev/elide/truffledata/yaml/YamlPlan;',
         'SvmPlanBackend::decode ([B[Ldev/elide/truffledata/Schema;)Ldev/elide/truffledata/tape/TypedOwner;',
         'SvmPlanBackend::release ()V'),
@@ -240,8 +239,8 @@ SVM_ONLY_METHODS = {
         'SvmTypedOwner::nulls (J)J',
         'SvmTypedOwner::slotBase (J)I',
         'SvmTypedOwner::plan (J)I',
-        'SvmTypedOwner::slot (J)J',
-        'SvmTypedOwner::entry (J)J',
+        'SvmTypedOwner::slot (J)Ldev/elide/truffledata/yaml/generated/Yaml$YamlScalarSlot;',
+        'SvmTypedOwner::entry (J)Ldev/elide/truffledata/yaml/generated/Yaml$YamlRecordEntry;',
         'SvmTypedOwner::release ()V',
         'SvmTypedOwner::format ()Ldev/elide/truffledata/tape/TapeFormat;'),
     # The no-argument form is the static-image entry point (the kernel is linked; no library path).
@@ -268,16 +267,16 @@ SVM_ONLY_METHODS = {
         'JsonSvm::decode ([BLdev/elide/truffledata/json/JsonLimits;)Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm::adopt (JJJLjava/lang/Runnable;)Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm::verifyAbi ()V',
-        'JsonSvm::publish (Lorg/graalvm/nativeimage/c/type/VoidPointer;Ljava/lang/Runnable;)'
+        'JsonSvm::publish (Ldev/elide/truffledata/json/generated/Json$JsonResult;Ljava/lang/Runnable;)'
         'Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm::release (J)V',
         # The opt-in cells route's pinned decode (//json/cells/tests:native_test; flag off it folds away).
-        'JsonSvm::cellsDecode ([BLdev/elide/truffledata/json/JsonLimits;Lorg/graalvm/nativeimage/c/type/VoidPointer;)I',
-        'JsonSvm::adoptResult (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/json/JsonMessage;',
+        'JsonSvm::cellsDecode ([BLdev/elide/truffledata/json/JsonLimits;Ldev/elide/truffledata/json/generated/Json$JsonResult;)I',
+        'JsonSvm::adoptResult (Ldev/elide/truffledata/json/generated/Json$JsonResult;)Ldev/elide/truffledata/json/JsonMessage;',
         # Result accessors (Myna v4 descriptor, side tables, retained input) and the session's
         # rebindable borrow reader (JSON performance ledger V1; was JsonSvm::borrow).
-        'JsonSvm::descriptor (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Lorg/graalvm/word/Pointer;',
-        'JsonSvm$Borrows::borrow (Lorg/graalvm/nativeimage/c/type/VoidPointer;)Ldev/elide/truffledata/tape/TapeBorrow;',
+        'JsonSvm::descriptor (Ldev/elide/truffledata/json/generated/Json$JsonResult;)Lorg/graalvm/word/Pointer;',
+        'JsonSvm$Borrows::borrow (Ldev/elide/truffledata/json/generated/Json$JsonResult;)Ldev/elide/truffledata/tape/TapeBorrow;',
         # The decoder handle returned by open() and the lexical table built by publish().
         'JsonSvm$1::decode ([BLdev/elide/truffledata/json/JsonLimits;)Ldev/elide/truffledata/json/JsonMessage;',
         'JsonSvm$1::adopt (Ljava/lang/foreign/MemorySegment;JLjava/lang/Runnable;)'
@@ -404,8 +403,6 @@ SVM_ONLY_METHODS = {
         'SvmTypedOwner::nulls (J)J',
         'SvmTypedOwner::slotBase (J)I',
         'SvmTypedOwner::plan (J)I',
-        'SvmTypedOwner::slot (J)J',
-        'SvmTypedOwner::entry (J)J',
         'SvmTypedOwner::release ()V',
         # Format name for its closed/thread messages (YAML plan Task 4).
         'SvmTypedOwner::format ()Ldev/elide/truffledata/tape/TapeFormat;',
@@ -423,6 +420,11 @@ JVM_UNREACHABLE_METHODS = {
     # Synthetic tag cursors expose resolved URI text but no source token: lexical() is always0,
     # so rawText rejects before a byte accessor can run. Tag view/snapshot/lifetime hooks are tested.
     **_tape_methods('AliasExport', 'AliasExport$1::lexicalByte (J)B'),
+    # Defensive export guards, built outside the hot loop: decoders cap nesting below MAX_DEPTH and
+    # publish only known node kinds, so no decoded tape reaches either.
+    **_tape_methods('TapeExportNode',
+        'TapeExportNode::depthLimit (Ldev/elide/truffledata/tape/TapeOwner;)Ljava/lang/IllegalStateException;',
+        'TapeExportNode::unknownKind (Ldev/elide/truffledata/tape/TapeOwner;)Ljava/lang/IllegalStateException;'),
     # Native typed tables always use HotSpot's exact native segment class; these fallbacks are
     # present for other JVM implementations, matching the JSON typed owner.
     **_yaml_methods('JvmTypedOwner',

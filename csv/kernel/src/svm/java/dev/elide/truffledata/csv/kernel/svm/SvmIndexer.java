@@ -5,6 +5,7 @@ import dev.elide.truffledata.csv.kernel.CsvIndex;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
 import dev.elide.truffledata.csv.kernel.generated.CsvNative;
 import dev.elide.truffledata.csv.kernel.generated.CsvNativeAbi;
+import dev.elide.truffledata.csv.kernel.generated.CsvNativeConstants;
 import java.nio.file.Path;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.PinnedObject;
@@ -32,6 +33,21 @@ public final class SvmIndexer extends CsvIndexer {
   /** {@code kernel} is a csv/native Kernel id (0 for the best this CPU supports). */
   public SvmIndexer(byte delimiter, byte quote, boolean quoting, int kernel, int leafBytes) {
     super(delimiter, quote, quoting);
+    verifyOnce();
+    int resolved = CsvNative.kernel(kernel);
+    if (resolved < 0) throw new IllegalArgumentException("CSV native kernel " + kernel);
+    this.kernel = resolved;
+    this.leafBytes = leafBytes;
+    format =
+        CsvNativeConstants.Format.withQuote(
+            CsvNativeConstants.Format.withDelimiter(
+                quoting ? CsvNativeConstants.Format.QUOTING : 0, delimiter),
+            quote);
+    name = "native-" + CsvIndex.kernelName(resolved) + (leafBytes > 0 ? "-svm-leaf" : "-svm");
+  }
+
+  /** Checks the linked library's ABI fingerprint once per process (the image's one library). */
+  private static void verifyOnce() {
     if (!verified) {
       // The image's ABI class (Platform.includedIn folds at image build time): one constant.
       String expected =
@@ -40,12 +56,6 @@ public final class SvmIndexer extends CsvIndexer {
         throw new IllegalStateException("Myna/CSV ABI fingerprint mismatch");
       verified = true;
     }
-    int resolved = CsvNative.kernel(kernel);
-    if (resolved < 0) throw new IllegalArgumentException("CSV native kernel " + kernel);
-    this.kernel = resolved;
-    this.leafBytes = leafBytes;
-    format = (delimiter & 0xFF) | (quote & 0xFF) << 8 | (quoting ? 1 << 16 : 0);
-    name = "native-" + CsvIndex.kernelName(resolved) + (leafBytes > 0 ? "-svm-leaf" : "-svm");
   }
 
   @Override
@@ -71,8 +81,8 @@ public final class SvmIndexer extends CsvIndexer {
               : CsvNative.index(data, length, target, format, kernel, carry);
     }
     if (result < 0) throw new IllegalStateException("CSV native index failed: " + result);
-    carry = result & 0xFF;
-    return (int) (result >>> 8);
+    carry = result & ((1L << CsvNativeConstants.INDEX_COUNT_SHIFT) - 1);
+    return (int) (result >>> CsvNativeConstants.INDEX_COUNT_SHIFT);
   }
 
   /** simdutf validation of the pinned array (see {@link #invalidUtf8}). */
@@ -93,7 +103,9 @@ public final class SvmIndexer extends CsvIndexer {
    * validation. Call it at image run time (it checks the ABI of the linked library).
    */
   public static CsvIndexing.Provider provider() {
-    String name = new SvmIndexer((byte) ',', (byte) '"', true, 0, LEAF_BYTES).name();
+    String name =
+        new SvmIndexer((byte) ',', (byte) '"', true, CsvNativeConstants.Kernel.AUTO, LEAF_BYTES)
+            .name();
     return new CsvIndexing.Provider() {
       @Override
       public String name() {
@@ -102,7 +114,8 @@ public final class SvmIndexer extends CsvIndexer {
 
       @Override
       public CsvIndexer create(byte delimiter, byte quote, boolean quoting) {
-        return new SvmIndexer(delimiter, quote, quoting, 0, LEAF_BYTES);
+        return new SvmIndexer(
+            delimiter, quote, quoting, CsvNativeConstants.Kernel.AUTO, LEAF_BYTES);
       }
 
       @Override

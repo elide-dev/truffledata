@@ -88,6 +88,8 @@ final class BatchBuilder implements CsvScanner.Records {
    * Per-thread staging chunks, lent to one builder for one index scan: the scan converts every
    * staged row before it returns ({@link #giveBack}), so nothing is staged between scans.
    */
+  // Per-thread scratch arrays (reused allocations); no context, engine or guest state.
+  @SuppressWarnings("TruffleStaticContextState")
   private static final ThreadLocal<long @Nullable [][]> CHUNKS = new ThreadLocal<>();
 
   /** First row of the staged chunk; rows [chunkBase, chunkBase + pending) are not converted yet. */

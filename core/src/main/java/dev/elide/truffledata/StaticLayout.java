@@ -312,6 +312,8 @@ public final class StaticLayout {
    * charges are not refunded.
    */
   @TruffleBoundary
+  // A record fill switching on storage kinds, not a bytecode dispatch loop.
+  @SuppressWarnings("TruffleBytecodeSwitch")
   public <E extends Exception> Record read(Source<E> source, @Nullable PayloadBudget parent)
       throws E {
     Object storage = shape.getFactory().create();

@@ -11,6 +11,8 @@ import dev.elide.myna.truffle.NativePointer;
 import dev.elide.myna.truffle.NativeResource;
 import dev.elide.myna.truffle.NativeStatusException;
 import dev.elide.truffledata.json.cells.generated.JsonCellsJvmTruffle;
+import dev.elide.truffledata.json.generated.JsonConstants.DecodeFlags;
+import dev.elide.truffledata.json.generated.JsonConstants.Status;
 import dev.elide.truffledata.json.generated.JsonFFM;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -287,27 +289,31 @@ final class CellsRouteTest {
       // the length is no longer a guest argument.
       for (Object data : List.of(new HeapBytes(document, false), NativeBytes.of(input, false))) {
         MemorySegment result = arena.allocate(88, 8);
-        assertEquals(
-            0,
-            decode.executeInt(new Object[] {data, LIMIT, LIMIT, LIMIT, LIMIT, 128, NativeBytes.of(result, true)}));
+        // decode is one of JsonResult's constructors (with decode_adopted and session_retain): it
+        // returns the owner, and the guest's buffer holds a copy of the struct the runtime keeps.
+        NativeResource owner =
+            assertInstanceOf(
+                NativeResource.class,
+                decode.execute(new Object[] {data, LIMIT, LIMIT, LIMIT, LIMIT, 128, NativeBytes.of(result, true)}));
+        assertEquals("JsonResult", owner.type());
         assertEquals(expected, tape(result));
-        // decode is not JsonResult's create (decode_adopted is): its result is the guest's own
-        // struct, which the release cell refuses, so host code releases it through the binding.
+        // The release cell takes only the owner, never the guest's copy of the struct.
         assertThrows(NativeCellException.class, () -> release.execute(new Object[] {NativeBytes.of(result, true)}));
-        JsonFFM.release(result);
+        release.execute(new Object[] {owner});
+        assertTrue(owner.isClosed());
       }
       MemorySegment result = arena.allocate(88, 8);
       assertThrows(
           NativeCellException.class,
           () ->
-              decode.executeInt(
+              decode.execute(
                   new Object[] {new HeapBytes(document, false), (long) document.length, LIMIT, LIMIT, LIMIT, LIMIT, 128, NativeBytes.of(result, true)}));
       Arena closed = Arena.ofShared();
       MemorySegment stale = bytes(closed, document, 0);
       closed.close();
       assertThrows(
           RuntimeException.class,
-          () -> decode.executeInt(new Object[] {NativeBytes.of(stale, false), LIMIT, LIMIT, LIMIT, LIMIT, 128, NativeBytes.of(result, true)}));
+          () -> decode.execute(new Object[] {NativeBytes.of(stale, false), LIMIT, LIMIT, LIMIT, LIMIT, 128, NativeBytes.of(result, true)}));
       assertEquals(0L, result.get(ValueLayout.JAVA_LONG, 0), "refused before native code");
 
       // session_decode(session, data, flags, text_out, result): text_out absent (null) and present.
@@ -325,7 +331,7 @@ final class CellsRouteTest {
       NativeResource session = (NativeResource) create.execute(new Object[] {NativeBytes.of(limits, false)});
       try {
         long capacity = 2L * document.length + 16;
-        for (int flags : new int[] {0, 1 /* TD_JSON_WANT_TEXT */}) {
+        for (int flags : new int[] {0, DecodeFlags.WANT_TEXT}) {
           MemorySegment text = flags == 0 ? MemorySegment.NULL : arena.allocate(capacity, 8);
           MemorySegment base = arena.allocate(88, 8);
           assertEquals(0, JsonFFM.session_decode(production, input, document.length, flags, text, flags == 0 ? 0 : capacity, base));
@@ -348,7 +354,7 @@ final class CellsRouteTest {
         }
         // A present text buffer without the flag is the native argument error, as on the binding.
         assertEquals(
-            1,
+            Status.ARGUMENT,
             sessionDecode.executeInt(
                 new Object[] {session, new HeapBytes(document, false), 0, NativeBytes.of(arena.allocate(8, 8), true), NativeBytes.of(arena.allocate(88, 8), true)}));
       } finally {
@@ -399,6 +405,21 @@ final class CellsRouteTest {
       assertThrows(
           NativeCellException.class,
           () -> sessionDecode.executeInt(new Object[] {session, new HeapBytes(document, false), 0, null, session}));
+      // session_retain is a JsonResult constructor: the guest gets the retained document's owner,
+      // which does not hold the session open (nocapture) and outlives it (checked below).
+      var retain = adopt(new JsonCellsJvmTruffle.session_retain_Cell());
+      MemorySegment kept = arena.allocate(88, 8);
+      NativeResource retained =
+          assertInstanceOf(NativeResource.class, retain.execute(new Object[] {session, NativeBytes.of(kept, true)}));
+      assertEquals("JsonResult", retained.type());
+      String retainedTape = tape(kept);
+      assertNotEquals("no view", retainedTape);
+      // The session holds no document now: retaining again is the native argument error.
+      NativeStatusException none =
+          assertThrows(
+              NativeStatusException.class,
+              () -> retain.execute(new Object[] {session, NativeBytes.of(arena.allocate(88, 8), true)}));
+      assertEquals(Status.ARGUMENT, none.status(), "TD_JSON_ARGUMENT without a live document");
 
       // A stream holds its session open.
       Object made = streamCreate.execute(new Object[] {session, 1024L, 65536L});
@@ -411,7 +432,7 @@ final class CellsRouteTest {
       assertThrows(NativeCellException.class, () -> sessionRelease.execute(new Object[] {session}));
       assertFalse(session.isClosed(), "a session with an open stream stays open");
       assertEquals(0, next.executeInt(new Object[] {stream, 0, NativeBytes.of(out, true)}));
-      assertEquals(8, next.executeInt(new Object[] {stream, 0, NativeBytes.of(out, true)}), "TD_JSON_STREAM_EMPTY");
+      assertEquals(Status.STREAM_EMPTY, next.executeInt(new Object[] {stream, 0, NativeBytes.of(out, true)}), "TD_JSON_STREAM_EMPTY");
       streamRelease.execute(new Object[] {stream});
       assertTrue(stream.isClosed());
       assertThrows(NativeCellException.class, () -> next.executeInt(new Object[] {stream, 0, NativeBytes.of(out, true)}));
@@ -425,6 +446,11 @@ final class CellsRouteTest {
       assertTrue(session.isClosed());
       sessionRelease.execute(new Object[] {session});
       session.close();
+      // The retained result outlives its session.
+      assertEquals(retainedTape, tape(kept));
+      var releaseResult = adopt(new JsonCellsJvmTruffle.release_Cell());
+      releaseResult.execute(new Object[] {retained});
+      assertTrue(retained.isClosed());
       assertThrows(
           NativeCellException.class,
           () -> sessionDecode.executeInt(new Object[] {session, new HeapBytes(document, false), 0, null, NativeBytes.of(out, true)}));
@@ -441,7 +467,7 @@ final class CellsRouteTest {
           assertThrows(
               NativeStatusException.class,
               () -> adopted.execute(new Object[] {new HeapBytes(truncated, false), (long) truncated.length, LIMIT, LIMIT, LIMIT, LIMIT, 128, NativeBytes.of(failed, true)}));
-      assertEquals(4, syntax.status(), "TD_JSON_SYNTAX");
+      assertEquals(Status.SYNTAX, syntax.status(), "TD_JSON_SYNTAX");
       assertEquals(0L, failed.get(ValueLayout.JAVA_LONG, 0));
       assertEquals(0L, failed.get(ValueLayout.JAVA_LONG, 8));
       // capacity < length is the native argument error.
@@ -449,14 +475,14 @@ final class CellsRouteTest {
           assertThrows(
               NativeStatusException.class,
               () -> adopted.execute(new Object[] {new HeapBytes(truncated, false), (long) truncated.length + 1, LIMIT, LIMIT, LIMIT, LIMIT, 128, NativeBytes.of(failed, true)}));
-      assertEquals(1, argument.status(), "TD_JSON_ARGUMENT");
+      assertEquals(Status.ARGUMENT, argument.status(), "TD_JSON_ARGUMENT");
       var plan = adopt(new JsonCellsJvmTruffle.plan_create_Cell());
       MemorySegment records = arena.allocate(8, 8);
       NativeStatusException empty =
           assertThrows(
               NativeStatusException.class,
               () -> plan.execute(new Object[] {NativeBytes.of(records, false), 0L, null, 0L, 0L, NativeBytes.of(arena.allocate(8, 8), true)}));
-      assertEquals(1, empty.status(), "TD_JSON_ARGUMENT for a plan without records");
+      assertEquals(Status.ARGUMENT, empty.status(), "TD_JSON_ARGUMENT for a plan without records");
 
       // decode_adopted's held borrow. The production binding decodes the same bytes first.
       MemorySegment input = bytes(arena, document, 64);

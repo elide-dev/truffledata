@@ -283,7 +283,7 @@ final class OwnedGenerator {
             .append(1L << i)
             .append(
                 "L)==0) {"
-                    + " com.oracle.truffle.api.CompilerDirectives.transferToInterpreterAndInvalidate();"
+                    + " com.oracle.truffle.api.CompilerDirectives.transferToInterpreter();"
                     + " throw new ContractViolation(\"Missing required field\"); }\n");
       if (!field.explicitPresence())
         out.append(" if (")
@@ -467,7 +467,7 @@ final class OwnedGenerator {
             .append(1L << i)
             .append(
                 "L)==0) {"
-                    + " com.oracle.truffle.api.CompilerDirectives.transferToInterpreterAndInvalidate();"
+                    + " com.oracle.truffle.api.CompilerDirectives.transferToInterpreter();"
                     + " throw new ContractViolation(\"Missing required field\"); }\n");
       if (!field.explicitPresence()) {
         String zero =

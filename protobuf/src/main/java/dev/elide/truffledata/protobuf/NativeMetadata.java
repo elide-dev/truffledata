@@ -91,7 +91,7 @@ public final class NativeMetadata {
     for (int i = 0; i < value.length(); i++) {
       char c = value.charAt(i);
       if (c == '"' || c == '\\') result.append('\\').append(c);
-      else if (c < 32) result.append(String.format("\\u%04x", (int) c));
+      else if (c < 32) result.append(String.format(java.util.Locale.ROOT, "\\u%04x", (int) c));
       else result.append(c);
     }
     return result.toString();

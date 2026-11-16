@@ -5,6 +5,7 @@ import dev.elide.truffledata.ContractViolation;
 import dev.elide.truffledata.Limits;
 import dev.elide.truffledata.TargetAbi;
 import dev.elide.truffledata.buffa.generated.BuffaAbi;
+import dev.elide.truffledata.buffa.generated.BuffaConstants;
 import dev.elide.truffledata.buffa.generated.BuffaFFM;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.SlabLimits;
@@ -177,18 +178,12 @@ final class FfmBackend implements BuffaWire.Backend {
         throw callFailure(failure);
       }
       BuffaWire.status(status);
-      long count = result.get(ValueLayout.JAVA_LONG, BuffaFFM.Result_count_OFFSET),
+      long count = BuffaFFM.Result_data_count(result),
           capacity = result.get(ValueLayout.JAVA_LONG, BuffaFFM.Result_capacity_OFFSET);
       ByteBuffer tape =
           count == 0
               ? ByteBuffer.allocate(0)
-              : result
-                  .get(ValueLayout.ADDRESS, BuffaFFM.Result_data_OFFSET)
-                  .reinterpret(
-                      Math.multiplyExact(count, BuffaFFM.Field_LAYOUT.byteSize()),
-                      libraryArena,
-                      null)
-                  .asByteBuffer();
+              : BuffaFFM.Result_data(result, libraryArena).asByteBuffer();
       return new BuffaWire.Tape(tape, count, capacity, releaseAction);
     } catch (RuntimeException | Error failure) {
       releaseResult();
@@ -231,18 +226,12 @@ final class FfmBackend implements BuffaWire.Backend {
         throw callFailure(failure);
       }
       BuffaWire.status(status);
-      long count = result.get(ValueLayout.JAVA_LONG, BuffaFFM.Result_count_OFFSET);
+      long count = BuffaFFM.Result_data_count(result);
       long capacity = result.get(ValueLayout.JAVA_LONG, BuffaFFM.Result_capacity_OFFSET);
       ByteBuffer tape =
           count == 0
               ? ByteBuffer.allocate(0)
-              : result
-                  .get(ValueLayout.ADDRESS, BuffaFFM.Result_data_OFFSET)
-                  .reinterpret(
-                      Math.multiplyExact(count, BuffaFFM.Field_LAYOUT.byteSize()),
-                      libraryArena,
-                      null)
-                  .asByteBuffer();
+              : BuffaFFM.Result_data(result, libraryArena).asByteBuffer();
       return new BuffaWire.Tape(tape, count, capacity, retainAction, 0);
     } catch (RuntimeException | Error failure) {
       releaseResult();
@@ -263,7 +252,9 @@ final class FfmBackend implements BuffaWire.Backend {
         throw callFailure(failure);
       }
       BuffaWire.status(status);
-      long handle = slabResult.get(ValueLayout.ADDRESS, BuffaFFM.Result_data_OFFSET).address();
+      // The slab result slot also holds compileLayout's (smaller) LayoutResult.
+      long handle =
+          slabResult.get(ValueLayout.ADDRESS, BuffaFFM.LayoutResult_data_OFFSET).address();
       if (handle == 0) throw new IllegalStateException("Native layout compilation returned null");
       detached++;
       return handle;
@@ -322,7 +313,9 @@ final class FfmBackend implements BuffaWire.Backend {
         throw callFailure(failure);
       }
       long bytes = slabResult.get(ValueLayout.JAVA_LONG, BuffaFFM.SlabResult_bytes_OFFSET);
-      if (status == 6 && bytes > output.size() && bytes <= limits.maxSlabBytes())
+      if (status == BuffaConstants.Status.NEEDS_CAPACITY
+          && bytes > output.size()
+          && bytes <= limits.maxSlabBytes())
         return -Math.toIntExact(bytes);
       BuffaWire.status(status);
       if (bytes < 0 || bytes > output.size())
@@ -355,7 +348,7 @@ final class FfmBackend implements BuffaWire.Backend {
                       MemorySegment.ofAddress(compiled),
                       inputMemory,
                       (long) input.length,
-                      1,
+                      BuffaConstants.DecodeFlags.OWNING,
                       MemorySegment.NULL,
                       MemorySegment.ofArray(output),
                       (long) capacity,
@@ -368,11 +361,14 @@ final class FfmBackend implements BuffaWire.Backend {
         long bytes = slabResult.get(ValueLayout.JAVA_LONG, BuffaFFM.SlabResult_bytes_OFFSET);
         // Fixed stack scratch can overflow within the size bound; retry the same native
         // producer with its ordinary transition and bounded dynamic scratch, never Java.
-        if (status == 2) {
+        if (status == BuffaConstants.Status.BUDGET) {
           scratch = true;
           break;
         }
-        if (status == 6 && attempt == 0 && bytes > capacity && bytes <= limits.maxSlabBytes()) {
+        if (status == BuffaConstants.Status.NEEDS_CAPACITY
+            && attempt == 0
+            && bytes > capacity
+            && bytes <= limits.maxSlabBytes()) {
           capacity = Math.toIntExact(bytes);
           if (capacity > limits.criticalBytes()) {
             scratch = true;
@@ -430,7 +426,7 @@ final class FfmBackend implements BuffaWire.Backend {
                         MemorySegment.ofAddress(compiled),
                         memory,
                         (long) input.size(),
-                        1,
+                        BuffaConstants.DecodeFlags.OWNING,
                         MemorySegment.NULL,
                         output,
                         (long) capacity,
@@ -441,7 +437,10 @@ final class FfmBackend implements BuffaWire.Backend {
             throw callFailure(failure);
           }
           long bytes = slabResult.get(ValueLayout.JAVA_LONG, BuffaFFM.SlabResult_bytes_OFFSET);
-          if (status == 6 && attempt == 0 && bytes > capacity && bytes <= limits.maxSlabBytes()) {
+          if (status == BuffaConstants.Status.NEEDS_CAPACITY
+              && attempt == 0
+              && bytes > capacity
+              && bytes <= limits.maxSlabBytes()) {
             capacity = Math.toIntExact(bytes);
             continue;
           }

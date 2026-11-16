@@ -1011,6 +1011,8 @@ public final class CsvComparison {
     @Children private final ReadDoubleNode[] doubles;
     @Children private final ReadBooleanNode[] booleans;
 
+    // A constructor is not partially evaluated (trufflecheck counts every Node method as compiled).
+    @SuppressWarnings("TruffleMissingBoundary")
     Reads(String engine, char[] kinds) {
       super(ComparisonLanguage.current());
       this.name = "CsvReads[" + engine + "]";
@@ -1047,6 +1049,8 @@ public final class CsvComparison {
     }
 
     @ExplodeLoop
+    // An exploded loop over the columns, not a bytecode dispatch loop.
+    @SuppressWarnings("TruffleBytecodeSwitch")
     private long row(Object row) {
       long sum = 0;
       for (int c = 0; c < kinds.length; c++) {
