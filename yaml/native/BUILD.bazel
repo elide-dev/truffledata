@@ -153,6 +153,14 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
+# The seam's integer protocol alone (<Class>Constants: literals, no imports, no initializer), for
+# //yaml:constants.
+filegroup(
+    name = "java_constants",
+    srcs = ["generated/YamlConstants.java"],
+    visibility = ["//yaml:__subpackages__"],
+)
+
 filegroup(
     name = "native_resources",
     srcs = ["generated/META-INF/native-image/dev.elide.myna/dev.elide.truffledata.yaml.generated.Yaml/native-image.properties"],

@@ -14,6 +14,74 @@ namespace {
 using truffledata::yaml::error;
 using yaml_session = truffledata::yaml::session;
 
+// The seam's opaque handles are the session and stream objects themselves.
+yaml_session& session(YamlSession* handle) { return *reinterpret_cast<yaml_session*>(handle); }
+truffledata::yaml::stream& stream(YamlStream* handle) {
+  return *reinterpret_cast<truffledata::yaml::stream*>(handle);
+}
+YamlSession* as_handle(yaml_session* s) { return reinterpret_cast<YamlSession*>(s); }
+YamlStream* as_handle(truffledata::yaml::stream* s) { return reinterpret_cast<YamlStream*>(s); }
+
+// The published tables are the decoder's own entries, reinterpreted as the seam's structs (layouts
+// asserted below and beside yaml_plan). The C++ mirrors of the seam's integer protocol (errors.h, decoder.h, scalars.h, typed_plan.h)
+// must equal the generated seam.h definitions, which are the single source of truth.
+namespace yaml = truffledata::yaml;
+static_assert(yaml::status_ok == TRUFFLEDATA_YAML_STATUS_OK && yaml::status_argument == TRUFFLEDATA_YAML_STATUS_ARGUMENT &&
+              yaml::status_limit == TRUFFLEDATA_YAML_STATUS_LIMIT &&
+              yaml::status_allocation == TRUFFLEDATA_YAML_STATUS_ALLOCATION &&
+              yaml::status_syntax == TRUFFLEDATA_YAML_STATUS_SYNTAX &&
+              yaml::status_internal == TRUFFLEDATA_YAML_STATUS_INTERNAL &&
+              yaml::status_contract == TRUFFLEDATA_YAML_STATUS_CONTRACT &&
+              yaml::status_multiple_documents == TRUFFLEDATA_YAML_STATUS_MULTIPLE_DOCUMENTS &&
+              yaml::status_stream_empty == TRUFFLEDATA_YAML_STATUS_STREAM_EMPTY &&
+              yaml::status_stream_truncated == TRUFFLEDATA_YAML_STATUS_STREAM_TRUNCATED,
+              "errors.h status codes match seam.h");
+static_assert(yaml::error::capacity == TRUFFLEDATA_YAML_ERROR_MESSAGE_CAPACITY, "error message capacity");
+static_assert(yaml::session::retain_source == TRUFFLEDATA_YAML_DECODE_FLAGS_RETAIN_SOURCE &&
+                  yaml::session::want_directories == TRUFFLEDATA_YAML_DECODE_FLAGS_WANT_DIRECTORIES,
+              "session.h decode flags match seam.h");
+static_assert(yaml::meta_style_mask == TRUFFLEDATA_YAML_META_STYLE_MASK && yaml::meta_anchored == TRUFFLEDATA_YAML_META_ANCHORED &&
+              yaml::meta_alias == TRUFFLEDATA_YAML_META_ALIAS &&
+              yaml::meta_key_kind_shift == TRUFFLEDATA_YAML_META_KEY_KIND_SHIFT &&
+              yaml::meta_key_kind_mask == TRUFFLEDATA_YAML_META_KEY_KIND_MASK &&
+              yaml::meta_tag_shift == TRUFFLEDATA_YAML_META_TAG_SHIFT &&
+              yaml::meta_tag_limit == (TRUFFLEDATA_YAML_META_TAG_MASK >> TRUFFLEDATA_YAML_META_TAG_SHIFT) + 1,
+              "decoder.h yaml_meta layout matches seam.h");
+static_assert(uint32_t(yaml::scalar_style::plain) == TRUFFLEDATA_YAML_STYLE_PLAIN &&
+              uint32_t(yaml::scalar_style::single_quoted) == TRUFFLEDATA_YAML_STYLE_SINGLE_QUOTED &&
+              uint32_t(yaml::scalar_style::double_quoted) == TRUFFLEDATA_YAML_STYLE_DOUBLE_QUOTED &&
+              uint32_t(yaml::scalar_style::literal) == TRUFFLEDATA_YAML_STYLE_LITERAL &&
+              uint32_t(yaml::scalar_style::folded) == TRUFFLEDATA_YAML_STYLE_FOLDED &&
+              yaml::style_block == TRUFFLEDATA_YAML_STYLE_BLOCK && yaml::style_flow == TRUFFLEDATA_YAML_STYLE_FLOW &&
+              yaml::style_pair == TRUFFLEDATA_YAML_STYLE_PAIR,
+              "yaml_meta styles match seam.h");
+static_assert(uint32_t(yaml::key_kind::string) == TRUFFLEDATA_YAML_KEY_KIND_STRING &&
+              uint32_t(yaml::key_kind::null) == TRUFFLEDATA_YAML_KEY_KIND_NULL &&
+              uint32_t(yaml::key_kind::boolean) == TRUFFLEDATA_YAML_KEY_KIND_BOOLEAN &&
+              uint32_t(yaml::key_kind::integer) == TRUFFLEDATA_YAML_KEY_KIND_INTEGER &&
+              uint32_t(yaml::key_kind::floating) == TRUFFLEDATA_YAML_KEY_KIND_FLOATING,
+              "yaml_meta key kinds match seam.h");
+static_assert(yaml::doc_explicit_start == TRUFFLEDATA_YAML_DOCUMENT_FLAGS_EXPLICIT_START &&
+              yaml::doc_explicit_end == TRUFFLEDATA_YAML_DOCUMENT_FLAGS_EXPLICIT_END &&
+              yaml::doc_nonfinite == TRUFFLEDATA_YAML_DOCUMENT_FLAGS_NONFINITE &&
+              yaml::doc_source_retained == TRUFFLEDATA_YAML_DOCUMENT_FLAGS_SOURCE_RETAINED &&
+              yaml::doc_present == TRUFFLEDATA_YAML_DOCUMENT_FLAGS_PRESENT &&
+              yaml::doc_schema_1_1 == TRUFFLEDATA_YAML_DOCUMENT_FLAGS_SCHEMA_1_1,
+              "decoder.h document flags match seam.h");
+static_assert(uint32_t(yaml::schema::core) == TRUFFLEDATA_YAML_SCHEMA_CORE &&
+              uint32_t(yaml::schema::json) == TRUFFLEDATA_YAML_SCHEMA_JSON &&
+              uint32_t(yaml::schema::failsafe) == TRUFFLEDATA_YAML_SCHEMA_FAILSAFE &&
+              uint32_t(yaml::schema::yaml11) == TRUFFLEDATA_YAML_SCHEMA_YAML_1_1,
+              "scalars.h schemas match seam.h");
+static_assert(uint32_t(yaml::scalar_kind::boolean) == TRUFFLEDATA_YAML_FIELD_KIND_BOOLEAN &&
+              uint32_t(yaml::scalar_kind::int64) == TRUFFLEDATA_YAML_FIELD_KIND_INT64 &&
+              uint32_t(yaml::scalar_kind::uint64) == TRUFFLEDATA_YAML_FIELD_KIND_UINT64 &&
+              uint32_t(yaml::scalar_kind::float64) == TRUFFLEDATA_YAML_FIELD_KIND_FLOAT64 &&
+              uint32_t(yaml::scalar_kind::string) == TRUFFLEDATA_YAML_FIELD_KIND_STRING &&
+              uint32_t(yaml::scalar_kind::record) == TRUFFLEDATA_YAML_FIELD_KIND_RECORD,
+              "typed_plan.h field kinds match seam.h");
+static_assert(truffledata::tape::no_child == TRUFFLEDATA_YAML_NO_CHILD, "typed_plan.h no_child matches seam.h");
+
 bool aligned(const void* pointer) {
   return pointer && reinterpret_cast<uintptr_t>(pointer) % alignof(YamlResult) == 0;
 }
@@ -56,13 +124,14 @@ int32_t translate(YamlResult& result) {
 
 void tables(YamlResult& result, const yaml_session::document_view& d) {
   result.yaml_meta = const_cast<uint32_t*>(d.meta.data());
-  result.tags = const_cast<truffledata::yaml::span_entry*>(d.tags.data());
+  result.tags = reinterpret_cast<YamlSpan*>(const_cast<truffledata::yaml::span_entry*>(d.tags.data()));
   result.tag_count = d.tags.size();
-  result.anchors = const_cast<truffledata::yaml::anchor_entry*>(d.anchors.data());
+  result.anchors = reinterpret_cast<YamlAnchor*>(const_cast<truffledata::yaml::anchor_entry*>(d.anchors.data()));
   result.anchor_count = d.anchors.size();
   result.strings = reinterpret_cast<uint8_t*>(const_cast<char*>(d.strings.data()));
   result.strings_length = d.strings.size();
-  result.directives = const_cast<truffledata::yaml::directive_entry*>(d.directives.data());
+  result.directives =
+      reinterpret_cast<YamlTagDirective*>(const_cast<truffledata::yaml::directive_entry*>(d.directives.data()));
   result.directive_count = d.directives.size();
 }
 static_assert(sizeof(truffledata::yaml::span_entry) == sizeof(YamlSpan), "YamlSpan layout");
@@ -88,7 +157,7 @@ void publish_document(YamlResult& result, const yaml_session::document_view& d, 
 }
 
 bool valid_options(const YamlOptionsStruct& o) {
-  return o.max_depth <= 128 && o.max_input_bytes != 0 && o.schema <= TD_YAML_SCHEMA_YAML_1_1 &&
+  return o.max_depth <= TRUFFLEDATA_YAML_MAX_DEPTH && o.max_input_bytes != 0 && o.schema <= TD_YAML_SCHEMA_YAML_1_1 &&
          o.duplicate_keys <= TD_YAML_DUPLICATE_KEYS_PAIRS && o.merge_keys <= 1 && o.aliases <= 1 &&
          o.unknown_tags <= 1 && o.version_directive <= 1 && o.complex_keys <= TD_YAML_COMPLEX_KEYS_PAIRS;
 }
@@ -115,27 +184,28 @@ extern "C" uint8_t* td_yaml_fingerprint() {
   return reinterpret_cast<uint8_t*>(fingerprint);
 }
 
-extern "C" void td_yaml_release(void* output) {
+extern "C" void td_yaml_release(YamlResult* output) {
   if (!aligned(output)) return;
-  auto& result = *static_cast<YamlResult*>(output);
+  auto& result = *output;
   auto* owned = static_cast<truffledata::yaml::result_owner*>(result.owner);
   result = {};
   if (owned) owned->destroy();
 }
 
-extern "C" void* td_yaml_session_create(const void* options) {
+extern "C" YamlSession* td_yaml_session_create(const YamlOptionsStruct* options) {
   if (!aligned(options)) return nullptr;
-  const auto& o = *static_cast<const YamlOptionsStruct*>(options);
+  const auto& o = *options;
   if (!valid_options(o)) return nullptr;
   try {
-    return new yaml_session(session_options(o));
+    return as_handle(new yaml_session(session_options(o)));
   } catch (...) {
     return nullptr;
   }
 }
 
-extern "C" int32_t td_yaml_session_decode(void* handle, const uint8_t* data, uint64_t length, uint32_t flags,
-                                          uint8_t* text_out, uint64_t text_capacity, void* output) {
+extern "C" truffledata_yaml_status_t td_yaml_session_decode(YamlSession* handle, const uint8_t* data, uint64_t length,
+                                                            truffledata_yaml_decode_flags_t flags, uint8_t* text_out,
+                                                            uint64_t text_capacity, void* output) {
   if (!handle || !aligned(output)) return TD_YAML_ARGUMENT;
   auto& result = *static_cast<YamlResult*>(output);
   result = {};
@@ -143,7 +213,7 @@ extern "C" int32_t td_yaml_session_decode(void* handle, const uint8_t* data, uin
     message(result, "invalid YAML decode arguments", 29);
     return TD_YAML_ARGUMENT;
   }
-  auto& s = *static_cast<yaml_session*>(handle);
+  auto& s = session(handle);
   if (length > UINT32_MAX || length > s.options().storage.input_bytes) {
     message(result, "YAML resource limit: input bytes", 32);
     return TD_YAML_LIMIT;
@@ -158,12 +228,12 @@ extern "C" int32_t td_yaml_session_decode(void* handle, const uint8_t* data, uin
   }
 }
 
-extern "C" int32_t td_yaml_session_write_text(void* handle, uint8_t* text_out,
-                                                uint64_t capacity, void* output) {
+extern "C" truffledata_yaml_status_t td_yaml_session_write_text(YamlSession* handle, uint8_t* text_out,
+                                                                uint64_t capacity, YamlTextResult* output) {
   if (!handle || !aligned(output)) return TD_YAML_ARGUMENT;
-  auto& result = *static_cast<YamlTextResult*>(output);
+  auto& result = *output;
   result = {};
-  auto& s = *static_cast<yaml_session*>(handle);
+  auto& s = session(handle);
   if (!s.live() || (!text_out && capacity != 0) || (reinterpret_cast<uintptr_t>(text_out) & 1))
     return TD_YAML_ARGUMENT;
   try {
@@ -181,11 +251,11 @@ extern "C" int32_t td_yaml_session_write_text(void* handle, uint8_t* text_out,
   }
 }
 
-extern "C" int32_t td_yaml_session_retain(void* handle, void* output) {
+extern "C" truffledata_yaml_status_t td_yaml_session_retain(YamlSession* handle, YamlResult* output) {
   if (!handle || !aligned(output)) return TD_YAML_ARGUMENT;
-  auto& result = *static_cast<YamlResult*>(output);
+  auto& result = *output;
   if (result.owner || result.view) return TD_YAML_ARGUMENT;
-  auto& s = *static_cast<yaml_session*>(handle);
+  auto& s = session(handle);
   if (!s.live()) return TD_YAML_ARGUMENT;
   // Read before retain: the session forgets the document once its storage moves.
   auto d = s.current(s.input_length(), 0);
@@ -211,43 +281,44 @@ extern "C" int32_t td_yaml_session_retain(void* handle, void* output) {
   }
 }
 
-extern "C" void td_yaml_session_reset(void* handle) {
-  if (handle) static_cast<yaml_session*>(handle)->reset();
+extern "C" void td_yaml_session_reset(YamlSession* handle) {
+  if (handle) session(handle).reset();
 }
 
-extern "C" void td_yaml_session_release(void* handle) { delete static_cast<yaml_session*>(handle); }
+extern "C" void td_yaml_session_release(YamlSession* handle) { delete reinterpret_cast<yaml_session*>(handle); }
 
 // ---- Streams (plan Task 3) -------------------------------------------------------------------
 
-extern "C" void* td_yaml_stream_create(void* handle, uint64_t max_document_bytes, uint64_t buffer_bytes) {
+extern "C" YamlStream* td_yaml_stream_create(YamlSession* handle, uint64_t max_document_bytes, uint64_t buffer_bytes) {
   if (!handle || max_document_bytes == 0 || max_document_bytes > UINT32_MAX) return nullptr;
   try {
-    return new truffledata::yaml::stream(*static_cast<yaml_session*>(handle), size_t(max_document_bytes),
-                                         size_t(buffer_bytes < (uint64_t(1) << 40) ? buffer_bytes : uint64_t(1) << 40));
+    return as_handle(new truffledata::yaml::stream(session(handle), size_t(max_document_bytes),
+                                                size_t(buffer_bytes < (uint64_t(1) << 40) ? buffer_bytes : uint64_t(1) << 40)));
   } catch (...) {
     return nullptr;
   }
 }
 
-extern "C" uint64_t td_yaml_stream_feed(void* handle, const uint8_t* data, uint64_t length) {
+extern "C" uint64_t td_yaml_stream_feed(YamlStream* handle, const uint8_t* data, uint64_t length) {
   if (!handle || (!data && length)) return 0;
   try {
-    return static_cast<truffledata::yaml::stream*>(handle)->feed(data, size_t(length));
+    return stream(handle).feed(data, size_t(length));
   } catch (...) {
     return 0;  // allocation failure: nothing accepted
   }
 }
 
-extern "C" void td_yaml_stream_finish(void* handle) {
-  if (handle) static_cast<truffledata::yaml::stream*>(handle)->finish();
+extern "C" void td_yaml_stream_finish(YamlStream* handle) {
+  if (handle) stream(handle).finish();
 }
 
-extern "C" int32_t td_yaml_stream_next(void* handle, uint32_t flags, void* output) {
+extern "C" truffledata_yaml_status_t td_yaml_stream_next(YamlStream* handle, truffledata_yaml_decode_flags_t flags,
+                                                         void* output) {
   if (!handle || !aligned(output)) return TD_YAML_ARGUMENT;
   auto& result = *static_cast<YamlResult*>(output);
   result = {};
   if (flags & ~uint32_t(TD_YAML_RETAIN_SOURCE | TD_YAML_WANT_DIRECTORIES)) return TD_YAML_ARGUMENT;
-  auto& st = *static_cast<truffledata::yaml::stream*>(handle);
+  auto& st = stream(handle);
   yaml_session::document_view d;
   int32_t status = st.next(&d, ((flags & TD_YAML_RETAIN_SOURCE) ? yaml_session::retain_source : 0) |
       ((flags & TD_YAML_WANT_DIRECTORIES) ? yaml_session::want_directories : 0));
@@ -259,7 +330,9 @@ extern "C" int32_t td_yaml_stream_next(void* handle, uint32_t flags, void* outpu
   return status;
 }
 
-extern "C" void td_yaml_stream_release(void* handle) { delete static_cast<truffledata::yaml::stream*>(handle); }
+extern "C" void td_yaml_stream_release(YamlStream* handle) {
+  delete reinterpret_cast<truffledata::yaml::stream*>(handle);
+}
 
 namespace {
 struct yaml_plan {
@@ -279,31 +352,32 @@ static_assert(sizeof(truffledata::yaml::record_entry) == sizeof(YamlRecordEntry)
 static_assert(offsetof(truffledata::yaml::record_entry, plan) == offsetof(YamlRecordEntry, plan));
 } // namespace
 
-extern "C" int32_t td_yaml_plan_create(const void* records, uint64_t record_count,
-    const void* fields, uint64_t field_count, uint64_t max_name_bytes, const void* options, void* output) {
-  if (!aligned(output) || !aligned(options) || !valid_options(*static_cast<const YamlOptionsStruct*>(options)))
+extern "C" truffledata_yaml_status_t td_yaml_plan_create(const YamlRecordPlan* records, uint64_t record_count,
+    const YamlScalarField* fields, uint64_t field_count, uint64_t max_name_bytes, const YamlOptionsStruct* options,
+    YamlPlan* output) {
+  if (!aligned(output) || !aligned(options) || !valid_options(*options))
     return TD_YAML_ARGUMENT;
-  auto& result = *static_cast<YamlPlan*>(output);
+  auto& result = *output;
   if (result.owner) return TD_YAML_ARGUMENT;
   if (!record_count || !records
       || reinterpret_cast<uintptr_t>(records) % alignof(YamlRecordPlan))
     return TD_YAML_ARGUMENT;
-  if (record_count > 65536 || field_count > 64 * record_count)
+  if (record_count > TRUFFLEDATA_YAML_MAX_PLAN_RECORDS || field_count > TRUFFLEDATA_YAML_MAX_RECORD_FIELDS * record_count)
     return TD_YAML_LIMIT;
   if (field_count && !aligned(fields)) return TD_YAML_ARGUMENT;
-  const auto* layout = static_cast<const YamlRecordPlan*>(records);
+  const auto* layout = records;
   uint64_t next = 0;
   // Records partition the field table in order: record i owns
   // fields [fields_offset, fields_offset + field_count).
   for (uint64_t r = 0; r < record_count; ++r) {
-    if (layout[r].field_count > 64) return TD_YAML_LIMIT;
+    if (layout[r].field_count > TRUFFLEDATA_YAML_MAX_RECORD_FIELDS) return TD_YAML_LIMIT;
     if (layout[r].fields_offset != next || layout[r].field_count > field_count - next)
       return TD_YAML_ARGUMENT;
     next += layout[r].field_count;
   }
   if (next != field_count) return TD_YAML_ARGUMENT;
   try {
-    const auto* source = static_cast<const YamlScalarField*>(fields);
+    const auto* source = fields;
     std::vector<std::vector<truffledata::yaml::scalar_field>> schema(record_count);
     uint64_t names = 0;
     for (uint64_t r = 0; r < record_count; ++r) {
@@ -311,7 +385,8 @@ extern "C" int32_t td_yaml_plan_create(const void* records, uint64_t record_coun
       record.reserve(layout[r].field_count);
       for (uint64_t i = layout[r].fields_offset; i < layout[r].fields_offset + layout[r].field_count; ++i) {
         const auto& field = source[i];
-        if (field.kind > 5 || (field.flags & ~7u) || (!field.name && field.name_length))
+        if (field.kind > TRUFFLEDATA_YAML_FIELD_KIND_RECORD || (field.flags & ~TRUFFLEDATA_YAML_FIELD_FLAGS_ALL) ||
+            (!field.name && field.name_length))
           return TD_YAML_ARGUMENT;
         if (field.name_length > UINT32_MAX || field.name_length > max_name_bytes - names)
           return TD_YAML_LIMIT;
@@ -319,12 +394,13 @@ extern "C" int32_t td_yaml_plan_create(const void* records, uint64_t record_coun
         std::string name;
         if (field.name_length) name.assign(reinterpret_cast<const char*>(field.name), field.name_length);
         record.push_back({std::move(name), static_cast<truffledata::yaml::scalar_kind>(field.kind),
-            bool(field.flags & 1), bool(field.flags & 2), field.minimum, field.maximum,
+            bool(field.flags & TRUFFLEDATA_YAML_FIELD_FLAGS_REQUIRED), bool(field.flags & TRUFFLEDATA_YAML_FIELD_FLAGS_NULLABLE),
+            field.minimum, field.maximum,
             field.unsigned_maximum, size_t(field.max_utf8_bytes), field.float_bits, field.length_unit,
-            field.minimum_length, field.maximum_length, bool(field.flags & 4), field.child});
+            field.minimum_length, field.maximum_length, bool(field.flags & TRUFFLEDATA_YAML_FIELD_FLAGS_REPEATED), field.child});
       }
     }
-    auto owned = std::make_unique<yaml_plan>(std::move(schema), session_options(*static_cast<const YamlOptionsStruct*>(options)));
+    auto owned = std::make_unique<yaml_plan>(std::move(schema), session_options(*options));
     result.owner = owned.release();
     return TD_YAML_OK;
   } catch (const std::bad_alloc&) { return TD_YAML_ALLOCATION; }
@@ -333,29 +409,29 @@ extern "C" int32_t td_yaml_plan_create(const void* records, uint64_t record_coun
     catch (...) { return TD_YAML_INTERNAL; }
 }
 
-extern "C" void td_yaml_plan_release(void* output) {
+extern "C" void td_yaml_plan_release(YamlPlan* output) {
   if (!aligned(output)) return;
-  auto& result = *static_cast<YamlPlan*>(output);
+  auto& result = *output;
   auto* owned = static_cast<yaml_plan*>(result.owner);
   result = {};
   delete owned;
 }
 
-extern "C" int32_t td_yaml_typed_decode(const void* plan_record, const uint8_t* data,
-    uint64_t length, void* output) {
+extern "C" truffledata_yaml_status_t td_yaml_typed_decode(const YamlPlan* plan_record, const uint8_t* data,
+    uint64_t length, YamlTypedResult* output) {
   if (!aligned(output)) return TD_YAML_ARGUMENT;
-  auto& result = *static_cast<YamlTypedResult*>(output);
+  auto& result = *output;
   if (result.owner || result.slots) return TD_YAML_ARGUMENT;
   result = {};
   if (!aligned(plan_record) || !data) return TD_YAML_ARGUMENT;
-  auto* plan = static_cast<const yaml_plan*>(static_cast<const YamlPlan*>(plan_record)->owner);
+  auto* plan = static_cast<const yaml_plan*>(plan_record->owner);
   if (!plan) return TD_YAML_ARGUMENT;
   try {
     auto owned = std::make_unique<truffledata::yaml::typed_document>(plan->plan,
         std::string_view(reinterpret_cast<const char*>(data), length), plan->options);
     auto stats = owned->allocations();
     result.owner = owned.get();
-    result.slots = const_cast<truffledata::yaml::scalar_slot*>(owned->slots());
+    result.slots = reinterpret_cast<YamlScalarSlot*>(const_cast<truffledata::yaml::scalar_slot*>(owned->slots()));
     result.count = owned->size();
     result.present = owned->present(); result.nulls = owned->nulls();
     result.copied_input_bytes = stats.copied_input_bytes;
@@ -364,13 +440,13 @@ extern "C" int32_t td_yaml_typed_decode(const void* plan_record, const uint8_t* 
     result.index_peak_bytes = stats.index_peak_bytes;
     result.index_allocations = stats.index_allocations;
     result.control_bytes = sizeof(truffledata::yaml::typed_document);
-    result.records = const_cast<truffledata::yaml::record_entry*>(owned->records());
+    result.records = reinterpret_cast<YamlRecordEntry*>(const_cast<truffledata::yaml::record_entry*>(owned->records()));
     result.record_count = owned->record_count();
     (void)owned.release();
     return TD_YAML_OK;
   } catch (const std::invalid_argument& e) {
     auto* text = reinterpret_cast<char*>(&result) + offsetof(YamlTypedResult, error_message);
-    size_t length = std::min(std::strlen(e.what()), size_t(255));
+    size_t length = std::min(std::strlen(e.what()), size_t(TRUFFLEDATA_YAML_ERROR_MESSAGE_CAPACITY - 1));
     std::memcpy(text, e.what(), length); text[length] = 0;
     result.error_message_length = uint32_t(length);
     return TD_YAML_CONTRACT;
@@ -380,14 +456,15 @@ extern "C" int32_t td_yaml_typed_decode(const void* plan_record, const uint8_t* 
     result.error_line = error.error_line; result.error_column = error.error_column;
     result.error_message_length = error.error_message_length;
     std::memcpy(reinterpret_cast<char*>(&result) + offsetof(YamlTypedResult, error_message),
-                reinterpret_cast<const char*>(&error) + offsetof(YamlResult, error_message), 256);
+                reinterpret_cast<const char*>(&error) + offsetof(YamlResult, error_message),
+                TRUFFLEDATA_YAML_ERROR_MESSAGE_CAPACITY);
     return status;
   }
 }
 
-extern "C" void td_yaml_typed_release(void* output) {
+extern "C" void td_yaml_typed_release(YamlTypedResult* output) {
   if (!aligned(output)) return;
-  auto& result = *static_cast<YamlTypedResult*>(output);
+  auto& result = *output;
   auto* owned = static_cast<truffledata::yaml::typed_document*>(result.owner);
   result = {};
   delete owned;

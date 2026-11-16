@@ -231,9 +231,9 @@ void c_abi() {
   o.max_aliases = 100;
   o.max_alias_expansion = 1000000;
   o.max_depth = 128;
-  void* s = td_yaml_session_create(&o);
+  YamlSession* s = td_yaml_session_create(&o);
   require(s);
-  void* st = td_yaml_stream_create(s, 1 << 20, 1 << 20);
+  YamlStream* st = td_yaml_stream_create(s, 1 << 20, 1 << 20);
   require(st && !td_yaml_stream_create(s, 0, 1));
   const std::string text = "%TAG !e! tag:e.com,2000:\n--- !e!m\nk: &a [1]\nv: *a\n...\n--- second\n";
   require(td_yaml_stream_feed(st, reinterpret_cast<const uint8_t*>(text.data()), text.size()) == text.size());
