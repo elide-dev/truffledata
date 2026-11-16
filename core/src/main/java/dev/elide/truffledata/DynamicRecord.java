@@ -1,9 +1,11 @@
 package dev.elide.truffledata;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.library.*;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.object.DynamicObject;
+import java.util.HashSet;
 
 /** Live, thread-confined view. Reads revalidate facts after arbitrary source mutation. */
 @ExportLibrary(DataLibrary.class)
@@ -12,7 +14,22 @@ public final class DynamicRecord extends AbstractRow {
 
   public DynamicRecord(DynamicObject object, Schema schema) {
     super(schema);
+    // A name-keyed backing object holds one property per label, so two ordinals sharing a name
+    // would alias the same slot and silently surface another ordinal's value and presence. The
+    // schema decides uniqueness once; only a rejection searches for the label.
+    if (!schema.uniqueNames()) throw duplicateLabel(schema);
     this.object = object;
+  }
+
+  @TruffleBoundary
+  private static IllegalArgumentException duplicateLabel(Schema schema) {
+    HashSet<String> seen = new HashSet<>(schema.size());
+    for (int i = 0; i < schema.size(); i++) {
+      String name = schema.field(i).name();
+      if (!seen.add(name))
+        return new IllegalArgumentException("DynamicRecord requires unique field names: " + name);
+    }
+    throw new IllegalStateException("Schema reported a duplicate label but has none");
   }
 
   @ExportMessage

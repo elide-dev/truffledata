@@ -528,6 +528,33 @@ class CoreTest {
   }
 
   @Test
+  void dynamicRecordRejectsDuplicateLabelSchemas() throws Exception {
+    DynamicObject object = new DynamicObject(Shape.newBuilder().build()) {};
+    // Same-kind duplicate labels alias a single DynamicObject slot and would surface another
+    // ordinal's value/presence silently; the representation rejects the schema at construction.
+    var sameKind = Schema.of(Field.requiredLong("a"), Field.requiredLong("a"));
+    var e = assertThrows(IllegalArgumentException.class, () -> new DynamicRecord(object, sameKind));
+    var message = e.getMessage();
+    assertNotNull(message);
+    assertTrue(message.contains("a"), message);
+    // ANY duplicates satisfy their own contract, so aliasing is undetectable at validate-time.
+    var anyKind =
+        Schema.of(
+            new Field("x", Field.Kind.ANY, true, true), new Field("x", Field.Kind.ANY, true, true));
+    assertThrows(IllegalArgumentException.class, () -> new DynamicRecord(object, anyKind));
+    // A triple-duplicate schema (mirrors wideSchemaLookupPreservesAmbiguityAndHashCollisions)
+    // is rejected too; the message reports the colliding label.
+    var triple =
+        Schema.of(Field.requiredLong("a"), Field.requiredLong("a"), Field.requiredLong("a"));
+    assertThrows(IllegalArgumentException.class, () -> new DynamicRecord(object, triple));
+    // Distinct names still construct and read through the live view: no regression.
+    DynamicObject.PutNode.getUncached().execute(object, "a", 1L);
+    var row = new DynamicRecord(object, Schema.of(Field.requiredLong("a")));
+    var data = DataLibrary.factory().getUncached();
+    assertEquals(1L, data.readLong(row, 0));
+  }
+
+  @Test
   void structuralAndPayloadBudgetsFailClosed() {
     Schema schema = Schema.of(new Field("s", Field.Kind.STRING, false, false));
     assertThrows(
