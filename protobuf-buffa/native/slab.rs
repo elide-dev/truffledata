@@ -26,24 +26,26 @@ use std::mem::MaybeUninit;
 
 type Result<T> = std::result::Result<T, i32>;
 
+use crate::seam::{DecodeFlags, SlabFlags};
+
 /// The slab did not fit `capacity`; `result.bytes` is the exact length needed.
-pub const NEEDS_CAPACITY: i32 = 6;
+pub const NEEDS_CAPACITY: i32 = crate::seam::Status::NEEDS_CAPACITY.0;
 
-/// Decode flags (`td_buffa_decode_slab`).
-pub const FLAG_OWNING: u32 = 1;
+/// Decode flags (`td_buffa_decode_slab`; seam `DecodeFlags`).
+pub const FLAG_OWNING: u32 = DecodeFlags::OWNING.0;
 /// Opt-in projection validation that defers UTF-8 checks for omitted/lazy subtrees.
-pub const FLAG_LAX: u32 = 2;
+pub const FLAG_LAX: u32 = DecodeFlags::LAX.0;
 /// Walk and size only: nothing is written and the result is `NEEDS_CAPACITY` (or an error).
-pub const FLAG_SIZING_ONLY: u32 = 4;
+pub const FLAG_SIZING_ONLY: u32 = DecodeFlags::SIZING_ONLY.0;
 /// The caller retains the input for external bytes and lazy child payloads.
-pub const FLAG_BORROWING: u32 = 8;
+pub const FLAG_BORROWING: u32 = DecodeFlags::BORROWING.0;
 
-/// Slab header flags (docs/SLAB.md).
-pub const SLAB_OWNING: u32 = 1;
-pub const SLAB_CERTIFIED: u32 = 8;
-pub const SLAB_BORROWING: u32 = 2;
-pub const SLAB_LAX: u32 = 4;
-pub const SLAB_PROJECTED: u32 = 16;
+/// Slab header flags (docs/SLAB.md; seam `SlabFlags`, reported in `SlabResult.flags`).
+pub const SLAB_OWNING: u32 = SlabFlags::OWNING.0;
+pub const SLAB_CERTIFIED: u32 = SlabFlags::CERTIFIED.0;
+pub const SLAB_BORROWING: u32 = SlabFlags::BORROWING.0;
+pub const SLAB_LAX: u32 = SlabFlags::LAX.0;
+pub const SLAB_PROJECTED: u32 = SlabFlags::PROJECTED.0;
 pub const LAZY_CHILD: u32 = 1 << 31;
 const EXTERNAL: u32 = 1 << 30;
 const COUNTS_ONLY: u32 = 1;
@@ -58,9 +60,9 @@ const MAX_LENGTH: usize = (1 << 30) - 1;
 const DIRECT_LOOKUP: u32 = 2048;
 const NONE: u32 = u32::MAX;
 /// Deepest nesting accepted (the ABI 9 bound).
-pub const MAX_DEPTH: u32 = 128;
+pub const MAX_DEPTH: u32 = crate::seam::MAX_DEPTH;
 /// `td_buffa_decode_slab_small` bound on input length and output capacity.
-pub const SMALL_LIMIT: u64 = 65536;
+pub const SMALL_LIMIT: u64 = crate::seam::SMALL_LIMIT;
 
 // Slot kind codes (Layout.SlotKind ordinal + 1).
 const K_I32: u32 = 1;

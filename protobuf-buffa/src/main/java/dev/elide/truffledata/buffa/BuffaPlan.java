@@ -212,12 +212,12 @@ public final class BuffaPlan implements AutoCloseable {
 
   @TruffleBoundary
   public TypedMessage parseText(String text, int maxNativeBytes) {
-    return text(text, 1, maxNativeBytes);
+    return text(text, BuffaConstants.Format.TEXT, maxNativeBytes);
   }
 
   @TruffleBoundary
   public TypedMessage parseJson(String json, int maxNativeBytes) {
-    return text(json, 2, maxNativeBytes);
+    return text(json, BuffaConstants.Format.JSON, maxNativeBytes);
   }
 
   private TypedMessage text(String text, int format, int nativeBytes) {
@@ -245,7 +245,10 @@ public final class BuffaPlan implements AutoCloseable {
       var backend = decoder.backend;
       if (backend == null) {
         String text = StandardCharsets.UTF_8.decode(source.bytes.duplicate()).toString();
-        ProtoAccess owned = format == 1 ? plan.parseText(text) : plan.parseJson(text, anyTypes);
+        ProtoAccess owned =
+            format == BuffaConstants.Format.TEXT
+                ? plan.parseText(text)
+                : plan.parseJson(text, anyTypes);
         return owner.finish(fromJava(owner, owned), 0);
       }
       try (var tape = backend.typed(schema, input, format, payload, plan, nativeBytes)) {
@@ -463,7 +466,10 @@ public final class BuffaPlan implements AutoCloseable {
       values = Arrays.copyOf(hints.defaults, hints.defaults.length, Object[].class);
       present = values.length > Long.SIZE ? new boolean[values.length] : NO_SEEN_FIELDS;
       // Binary protobuf permits duplicate fields; only text formats track duplicates.
-      seen = context.format == 0 ? NO_SEEN_FIELDS : new boolean[values.length];
+      seen =
+          context.format == BuffaConstants.Format.BINARY
+              ? NO_SEEN_FIELDS
+              : new boolean[values.length];
     }
 
     boolean present(int ordinal) {
@@ -485,7 +491,7 @@ public final class BuffaPlan implements AutoCloseable {
       if (field.oneof() >= 0)
         for (int i = 0; i < values.length; i++) {
           if (i != ordinal && plan.field(i).oneof() == field.oneof()) {
-            if (context.format != 0 && present(i))
+            if (context.format != BuffaConstants.Format.BINARY && present(i))
               throw new ContractViolation("Multiple oneof members");
             values[i] = hints.defaults[i];
             present(i, false);
@@ -509,8 +515,8 @@ public final class BuffaPlan implements AutoCloseable {
         if (ordinal < 0 || ordinal >= plan.size() || next <= index || next > end || length < 0)
           throw new IllegalStateException("Invalid native typed index");
         var f = plan.field(ordinal);
-        if (kind == 100) {
-          if (context.format != 2 || !f.repeated() || seen[ordinal])
+        if (kind == BuffaConstants.TYPED_FIELD_MARKER) {
+          if (context.format != BuffaConstants.Format.JSON || !f.repeated() || seen[ordinal])
             throw new ContractViolation("Duplicate JSON field");
           seen[ordinal] = true;
           index = next;
@@ -518,8 +524,9 @@ public final class BuffaPlan implements AutoCloseable {
         }
         boolean nullEnum =
             f.enumType() != null && f.enumType().name().equals("google.protobuf.NullValue");
-        if (kind == 0) {
-          if (context.format != 2) throw new IllegalStateException("Unexpected null marker");
+        if (kind == BuffaConstants.TYPED_NULL) {
+          if (context.format != BuffaConstants.Format.JSON)
+            throw new IllegalStateException("Unexpected null marker");
           if (length == 0 && (f.repeated() || !nullEnum)) {
             if (seen[ordinal]) throw new ContractViolation("Duplicate JSON field");
             seen[ordinal] = true;
@@ -528,11 +535,11 @@ public final class BuffaPlan implements AutoCloseable {
           }
           if (!nullEnum) throw new ContractViolation("Null JSON element");
         }
-        if (!f.repeated() && context.format != 0 && seen[ordinal])
+        if (!f.repeated() && context.format != BuffaConstants.Format.BINARY && seen[ordinal])
           throw new ContractViolation("Duplicate singular field");
-        if (context.format != 0) seen[ordinal] = true;
-        if (kind == 101) {
-          if (context.format != 2
+        if (context.format != BuffaConstants.Format.BINARY) seen[ordinal] = true;
+        if (kind == BuffaConstants.TYPED_ANY) {
+          if (context.format != BuffaConstants.Format.JSON
               || plan.jsonType() != ProtoJsonType.ANY
               || f.number() != 2
               || value < 0
@@ -548,9 +555,9 @@ public final class BuffaPlan implements AutoCloseable {
           index = next;
           continue;
         }
-        if (kind != 0 && kind != f.kind().ordinal() + 1)
+        if (kind != BuffaConstants.TYPED_NULL && kind != f.kind().ordinal() + 1)
           throw new IllegalStateException("Native kind mismatch");
-        if (f.map() && context.format == 0 && length != 0) {
+        if (f.map() && context.format == BuffaConstants.Format.BINARY && length != 0) {
           index = next;
           continue;
         }
@@ -567,7 +574,7 @@ public final class BuffaPlan implements AutoCloseable {
                       context);
           child.consume(tape, index + 1, next);
           decoded = child;
-        } else if (kind == 0) decoded = 0L;
+        } else if (kind == BuffaConstants.TYPED_NULL) decoded = 0L;
         else
           decoded =
               switch (f.kind()) {
@@ -654,7 +661,7 @@ public final class BuffaPlan implements AutoCloseable {
             if (keys != null) {
               Object key = DataLibrary.factory().getUncached().read(items[j], 0);
               if (key instanceof ExactNumber number) key = number.decimal().toBigIntegerExact();
-              if (keys.put(key, items[j]) != null && context.format == 2)
+              if (keys.put(key, items[j]) != null && context.format == BuffaConstants.Format.JSON)
                 throw new ContractViolation("Duplicate JSON map key");
             }
           }
