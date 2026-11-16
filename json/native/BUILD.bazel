@@ -7,6 +7,8 @@ cc_library(
     hdrs = [
         "decoder.h",
         "decoder_common.h",
+        # status.h takes the json.seam status codes from the generated header.
+        "generated/seam.h",
         "parser_pool.h",
         "session.h",
         "stage1.h",
@@ -122,6 +124,8 @@ filegroup(
     srcs = [
         "generated/Json.java",
         "generated/JsonAbi.java",
+        "generated/JsonConstants.java",
+        "generated/JsonDirectives.java",
         "generated/JsonFFM.java",
     ],
     visibility = ["//visibility:public"],

@@ -19,17 +19,40 @@ import java.util.Objects;
  * structures and must not modify them.
  */
 public final class TypedLayout {
+  // The plan protocol below is shared by the formats' C ABIs (tape/native/typed_plan.h), and each
+  // format's seam declares it again for its own bindings (json.seam: MAX_PLAN_DEPTH,
+  // MAX_PLAN_RECORDS, MAX_RECORD_FIELDS, NO_CHILD, FieldKind, FieldFlags, LengthUnit). This
+  // format-neutral layer cannot depend on one format's generated constants, so the values are
+  // named here once and each format's tests check them against its own seam's constants.
+
   /** Maximum record nesting, counting the root as 1. */
   public static final int MAX_DEPTH = 32;
 
   /** Maximum number of distinct records (root included) in one plan. */
   public static final int MAX_RECORDS = 65536;
 
+  /** Maximum number of fields of one record. */
+  public static final int MAX_FIELDS = 64;
+
   /** Field-name bytes accepted per plan, enforced here and by the native plan. */
   public static final long MAX_NAME_BYTES = 1 << 20;
 
   /** Record-table value of a field without a child record. */
   public static final int NO_CHILD = -1;
+
+  /** Field kinds ({@link #kinds}). */
+  public static final int KIND_BOOLEAN = 0,
+      KIND_INT64 = 1,
+      KIND_UINT64 = 2,
+      KIND_FLOAT64 = 3,
+      KIND_STRING = 4,
+      KIND_RECORD = 5;
+
+  /** Field flag bits ({@link #flags}). */
+  public static final int FLAG_REQUIRED = 1, FLAG_NULLABLE = 2, FLAG_REPEATED = 4;
+
+  /** Length units ({@link #lengthUnits}); 0 when the field has no length contract. */
+  public static final int LENGTH_UNCONSTRAINED = 0, LENGTH_UTF16 = 1, LENGTH_SCALAR_VALUES = 2;
 
   public static final long UNSIGNED_MAXIMUM = -1L;
   public static final long MAX_UTF8_BYTES = 64 * 1024 * 1024;
@@ -68,7 +91,7 @@ public final class TypedLayout {
     int total = 0;
     for (int r = 0; r < order.size(); r++) {
       Schema schema = order.get(r);
-      if (schema.size() > 64) throw new IllegalArgumentException(this.format + " scalar field limit");
+      if (schema.size() > MAX_FIELDS) throw new IllegalArgumentException(this.format + " scalar field limit");
       total += schema.size();
       var seen = new HashSet<String>();
       for (int i = 0; i < schema.size(); i++) {
@@ -136,9 +159,10 @@ public final class TypedLayout {
     int kind = kind(value);
     kinds[at] = kind;
     flags[at] =
-        (f.optional() ? 0 : 1) | (f.nullable() ? 2 : 0) | (f.kind() == Field.Kind.ARRAY ? 4 : 0);
+        (f.optional() ? 0 : FLAG_REQUIRED) | (f.nullable() ? FLAG_NULLABLE : 0)
+            | (f.kind() == Field.Kind.ARRAY ? FLAG_REPEATED : 0);
     children[at] =
-        kind == 5
+        kind == KIND_RECORD
             ? Objects.requireNonNull(ordinals.get(Objects.requireNonNull(c.recordType())))
             : NO_CHILD;
     long min = Long.MIN_VALUE, max = Long.MAX_VALUE;
@@ -158,7 +182,9 @@ public final class TypedLayout {
     var length = c.length();
     if (length != null) {
       lengthUnits[at] =
-          length.unit() == dev.elide.truffledata.Constraints.LengthUnit.UTF16 ? 1 : 2;
+          length.unit() == dev.elide.truffledata.Constraints.LengthUnit.UTF16
+              ? LENGTH_UTF16
+              : LENGTH_SCALAR_VALUES;
       minimumLengths[at] = length.min();
       maximumLengths[at] = length.max();
     }
@@ -183,14 +209,14 @@ public final class TypedLayout {
 
   private int kind(Field field) {
     return switch (field.kind()) {
-      case BOOLEAN -> 0;
-      case INT64 -> 1;
-      case FLOAT64 -> 3;
-      case STRING -> 4;
+      case BOOLEAN -> KIND_BOOLEAN;
+      case INT64 -> KIND_INT64;
+      case FLOAT64 -> KIND_FLOAT64;
+      case STRING -> KIND_STRING;
       case RECORD -> {
         if (field.constraints().recordType() == null)
           throw new IllegalArgumentException(format + " record field requires a record type");
-        yield 5;
+        yield KIND_RECORD;
       }
       case EXACT -> {
         var width = field.constraints().integer();
@@ -199,7 +225,7 @@ public final class TypedLayout {
             || width.bits() != 64
             || field.constraints().decimal() != null)
           throw new IllegalArgumentException("Unsupported " + format + " exact contract");
-        yield 2;
+        yield KIND_UINT64;
       }
       default ->
           throw new IllegalArgumentException(

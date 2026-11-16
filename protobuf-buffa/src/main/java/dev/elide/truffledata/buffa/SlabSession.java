@@ -4,6 +4,7 @@ import static dev.elide.truffledata.protobuf.SlabFormat.*;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.*;
+import dev.elide.truffledata.buffa.generated.BuffaConstants;
 import dev.elide.truffledata.protobuf.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -149,7 +150,7 @@ public final class SlabSession implements AutoCloseable {
               input,
               output,
               limits,
-              projection == null ? 1 : projection.decodeFlags(),
+              projection == null ? BuffaConstants.DecodeFlags.OWNING : projection.decodeFlags(),
               projectionInput);
       if (written < 0) {
         grow(-written);
@@ -159,7 +160,7 @@ public final class SlabSession implements AutoCloseable {
                 input,
                 Objects.requireNonNull(arena),
                 limits,
-                projection == null ? 1 : projection.decodeFlags(),
+                projection == null ? BuffaConstants.DecodeFlags.OWNING : projection.decodeFlags(),
                 projectionInput);
       }
       if (written <= 0) throw new ContractViolation("Slab capacity retry failed");

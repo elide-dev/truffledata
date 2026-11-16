@@ -8,6 +8,7 @@ import dev.elide.myna.truffle.NativeBytes;
 import dev.elide.myna.truffle.NativeResource;
 import dev.elide.truffledata.json.cells.generated.JsonCellsTruffle;
 import dev.elide.truffledata.json.generated.Json;
+import dev.elide.truffledata.json.generated.JsonConstants;
 import dev.elide.truffledata.json.tests.SvmAcceptance;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -16,7 +17,6 @@ import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 
@@ -100,7 +100,7 @@ public final class CellsAcceptance {
     JsonLimits limits = JsonLimits.DEFAULT;
     long capacity = document.length + 64;
     Pointer region = UnmanagedMemory.calloc(WordFactory.unsigned(capacity));
-    VoidPointer result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+    Json.JsonResult result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
     try {
       if (region.isNull() || result.isNull()) throw new OutOfMemoryError();
       for (int b = 0; b < document.length; b++) region.writeByte(b, document[b]);
@@ -139,7 +139,7 @@ public final class CellsAcceptance {
                       limits.maxNodes(),
                       limits.maxTextBytes(),
                       limits.maxDepth(),
-                      (VoidPointer) WordFactory.pointer(out));
+                      (Json.JsonResult) WordFactory.pointer(out));
             } finally {
               pinned.close();
             }
@@ -154,7 +154,7 @@ public final class CellsAcceptance {
                     limits.maxNodes(),
                     limits.maxTextBytes(),
                     limits.maxDepth(),
-                    (VoidPointer) WordFactory.pointer(out));
+                    (Json.JsonResult) WordFactory.pointer(out));
             Json.release(WordFactory.pointer(out));
             if ((status | adopted) != 0) throw new AssertionError("Static decode status");
           };
@@ -224,7 +224,7 @@ public final class CellsAcceptance {
     long length = document.length;
     long capacity = length + 64;
     Pointer region = UnmanagedMemory.calloc(WordFactory.unsigned(capacity));
-    VoidPointer result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+    Json.JsonResult result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
     try (Context context =
         Context.newBuilder("json-test")
             .allowExperimentalOptions(true)
@@ -359,7 +359,7 @@ public final class CellsAcceptance {
   private static JsonMessage decode(byte[] utf8, JsonLimits limits) {
     if (utf8.length == 0) throw new IllegalArgumentException("Empty JSON input");
     if (utf8.length > limits.maxInputBytes()) throw new IllegalArgumentException("JSON input limit");
-    VoidPointer result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+    Json.JsonResult result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
     if (result.isNull()) throw new OutOfMemoryError("JSON result allocation");
     try {
       int status;
@@ -392,7 +392,7 @@ public final class CellsAcceptance {
       throw new IllegalArgumentException("Invalid adopted JSON region");
     JsonLimits limits = JsonLimits.DEFAULT;
     if (length > limits.maxInputBytes()) throw new IllegalArgumentException("JSON input limit");
-    VoidPointer result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+    Json.JsonResult result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
     if (result.isNull()) throw new OutOfMemoryError("JSON result allocation");
     try {
       JsonSvm.checkStatus(
@@ -414,9 +414,9 @@ public final class CellsAcceptance {
   }
 
   private static JsonMessage message(
-      VoidPointer result, @org.jspecify.annotations.Nullable Runnable onClose) {
-    Pointer descriptor = (Pointer) Json.JsonResult.view(result);
-    if (descriptor.isNull() || descriptor.readInt(0) != 1)
+      Json.JsonResult result, @org.jspecify.annotations.Nullable Runnable onClose) {
+    Pointer descriptor = (Pointer) result.view();
+    if (descriptor.isNull() || descriptor.readInt(0) != JsonConstants.TAPE_VIEW_VERSION)
       throw new IllegalStateException("Unsupported compact tape ABI");
     long address = result.rawValue();
     return new SvmJsonMessage(descriptor, address) {
@@ -431,7 +431,7 @@ public final class CellsAcceptance {
     };
   }
 
-  private static void free(VoidPointer result) {
+  private static void free(Json.JsonResult result) {
     Json.release(result);
     UnmanagedMemory.free(result);
   }

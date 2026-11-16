@@ -265,6 +265,8 @@ public final class CsvBatch implements TruffleObject, AutoCloseable {
   private static final int REGION_BYTES = 4096;
 
   /** Per-thread copy of one mapped cell, plus a word of slack for the ASCII test. */
+  // Per-thread scratch arrays (reused allocations); no context, engine or guest state.
+  @SuppressWarnings("TruffleStaticContextState")
   private static final ThreadLocal<byte @Nullable []> REGION = new ThreadLocal<>();
 
   /** The span relative to a copy of its own bytes. */

@@ -1,5 +1,6 @@
 package dev.elide.truffledata.json;
 
+import dev.elide.truffledata.json.generated.JsonConstants;
 import dev.elide.truffledata.json.generated.JsonFFM;
 import dev.elide.truffledata.tape.SegmentTape;
 import dev.elide.truffledata.tape.TapeBorrow;
@@ -144,7 +145,7 @@ final class JvmSessionBackend extends JsonSession.Backend {
   int retainInto(MemorySegment owned) {
     try {
       int status = calls.session_retain(session, owned);
-      if (status != 0) calls.session_reset(session);
+      if (status != JsonConstants.Status.OK) calls.session_reset(session);
       return status;
     } catch (Throwable failure) {
       throw JsonJvm.callFailure(failure);

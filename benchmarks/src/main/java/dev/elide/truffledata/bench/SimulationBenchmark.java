@@ -150,7 +150,7 @@ public final class SimulationBenchmark {
         staticRows = new AbstractRow[ROWS],
         staticMixed = new AbstractRow[ROWS],
         dynamicRows = new AbstractRow[ROWS];
-    Shape shape = Shape.newBuilder().layout(BenchmarkObject.class).build();
+    Shape shape = Shape.newBuilder().layout(BenchmarkObject.class, java.lang.invoke.MethodHandles.lookup()).build();
     for (int i = 0; i < ROWS; i++) {
       batchRows[i] = narrowBatch.row(i);
       mixedRows[i] = mixedBatch.row(i);

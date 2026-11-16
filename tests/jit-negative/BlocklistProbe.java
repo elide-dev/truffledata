@@ -26,6 +26,7 @@ public final class BlocklistProbe {
     }
 
     @Override
+    @SuppressWarnings("TruffleMissingBoundary") // the violation this probe exists to prove
     public Object execute(VirtualFrame frame) {
       // Deliberately missing @TruffleBoundary: prove the runtime's blocklist is enforced.
       return ((BigDecimal) frame.getArguments()[0]).add(BigDecimal.ONE);

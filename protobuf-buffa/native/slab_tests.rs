@@ -4,6 +4,56 @@ use super::*;
 use crate::allocation_probe;
 use crate::{Field, PANIC, seam};
 
+// The entry points over raw codes and byte handles, as the tests below drive them; the ABI types
+// are the seam's (Layout, DecodeFlags, Status), which these only convert.
+#[allow(clippy::too_many_arguments)]
+unsafe fn ffi_decode_slab(
+    compiled: *const u8,
+    data: *const u8,
+    length: u64,
+    flags: u32,
+    projection: *const u8,
+    out: *mut u8,
+    capacity: u64,
+    max_depth: u32,
+    max_slab_bytes: u64,
+    result: *mut seam::SlabResult,
+) -> i32 {
+    let flags = seam::DecodeFlags(flags);
+    let compiled = compiled.cast();
+    unsafe {
+        crate::td_buffa_decode_slab(
+            compiled, data, length, flags, projection, out, capacity, max_depth, max_slab_bytes, result,
+        )
+    }
+    .0
+}
+#[allow(clippy::too_many_arguments)]
+unsafe fn ffi_decode_slab_small(
+    compiled: *const u8,
+    data: *const u8,
+    length: u64,
+    flags: u32,
+    projection: *const u8,
+    out: *mut u8,
+    capacity: u64,
+    max_depth: u32,
+    max_slab_bytes: u64,
+    result: *mut seam::SlabResult,
+) -> i32 {
+    let flags = seam::DecodeFlags(flags);
+    let compiled = compiled.cast();
+    unsafe {
+        crate::td_buffa_decode_slab_small(
+            compiled, data, length, flags, projection, out, capacity, max_depth, max_slab_bytes, result,
+        )
+    }
+    .0
+}
+unsafe fn ffi_release_layout(compiled: *mut u8) {
+    unsafe { crate::td_buffa_release_layout(compiled.cast()) }
+}
+
 // ---- Schema programs (NativeSchema's TDB3 tables plus the TDL1 section) ----
 
 /// One field: number, TDB3 kind (ProtoPlan.Kind ordinal + 1), flags (1 repeated, 2 map,
@@ -867,16 +917,16 @@ fn needed_bytes_exact() {
                 bytes: 0,
                 records: 0,
                 handles: 0,
-                flags: 0,
+                flags: seam::SlabFlags::NONE,
                 error: 0,
                 cells: u32::MAX,
             string_bytes: u32::MAX,
             };
             let rp = (&mut r as *mut seam::SlabResult).cast();
             let f = if small {
-                crate::td_buffa_decode_slab_small
+                ffi_decode_slab_small
             } else {
-                crate::td_buffa_decode_slab
+                ffi_decode_slab
             };
             let status = unsafe {
                 f(
@@ -902,7 +952,7 @@ fn needed_bytes_exact() {
         let (status, sized) = call(&mut none, 0, FLAG_OWNING, false);
         if status != NEEDS_CAPACITY {
             assert!(status == MALFORMED || status == BUDGET, "{status}");
-            unsafe { crate::td_buffa_release_layout(p) };
+            unsafe { ffi_release_layout(p) };
             continue;
         }
         checked += 1;
@@ -940,7 +990,7 @@ fn needed_bytes_exact() {
         } else {
             assert_eq!(status, BUDGET);
         }
-        unsafe { crate::td_buffa_release_layout(p) };
+        unsafe { ffi_release_layout(p) };
     }
     assert!(checked > 150, "{checked}");
 }
@@ -1629,7 +1679,7 @@ fn small_entry_allocates_nothing() {
             bytes: 0,
             records: 0,
             handles: 0,
-            flags: 0,
+            flags: seam::SlabFlags::NONE,
             error: 0,
             cells: u32::MAX,
             string_bytes: u32::MAX,
@@ -1637,9 +1687,9 @@ fn small_entry_allocates_nothing() {
         let rp = (&mut r as *mut seam::SlabResult).cast();
         for small in [true, false] {
             let f = if small {
-                crate::td_buffa_decode_slab_small
+                ffi_decode_slab_small
             } else {
-                crate::td_buffa_decode_slab
+                ffi_decode_slab
             };
             let (status, allocations) = allocation_probe::allocations(|| unsafe {
                 f(
@@ -1658,7 +1708,7 @@ fn small_entry_allocates_nothing() {
             assert_eq!(allocations, 0, "status {status}");
             decoded += usize::from(status == 0);
         }
-        unsafe { crate::td_buffa_release_layout(handle) };
+        unsafe { ffi_release_layout(handle) };
     }
     assert!(decoded > 300, "{decoded}");
     // Inputs that overflow fixed scratch: the small entry point returns BUDGET, still allocating
@@ -1685,19 +1735,19 @@ fn small_entry_allocates_nothing() {
         bytes: 0,
         records: 0,
         handles: 0,
-        flags: 0,
+        flags: seam::SlabFlags::NONE,
         error: 0,
         cells: u32::MAX,
             string_bytes: u32::MAX,
     };
     let rp = (&mut r as *mut seam::SlabResult).cast();
     unsafe {
-        let small = crate::td_buffa_decode_slab_small;
+        let small = ffi_decode_slab_small;
         let null = std::ptr::null();
         assert_eq!(small(handle, big.as_ptr(), big.len() as u64, 1, null, out.as_mut_ptr(), 64, 7, MAX_SLAB, rp), BUDGET);
         assert_eq!(small(handle, big.as_ptr(), 2, 1, null, out.as_mut_ptr(), SMALL_LIMIT + 1, 7, MAX_SLAB, rp), BUDGET);
         // Argument checks: null result, compiled or data; a projection; LAX; borrowing.
-        let normal = crate::td_buffa_decode_slab;
+        let normal = ffi_decode_slab;
         assert_eq!(normal(handle, big.as_ptr(), 2, 1, null, out.as_mut_ptr(), 64, 7, MAX_SLAB, std::ptr::null_mut()), MALFORMED);
         assert_eq!(normal(null, big.as_ptr(), 2, 1, null, out.as_mut_ptr(), 64, 7, MAX_SLAB, rp), MALFORMED);
         assert_eq!(normal(handle, null, 2, 1, null, out.as_mut_ptr(), 64, 7, MAX_SLAB, rp), MALFORMED);
@@ -1708,8 +1758,8 @@ fn small_entry_allocates_nothing() {
         // A handle that is not a compiled layout (wrong magic) is rejected.
         let fake = [0u64; 8];
         assert_eq!(normal(fake.as_ptr().cast(), big.as_ptr(), 2, 1, null, out.as_mut_ptr(), 64, 7, MAX_SLAB, rp), MALFORMED);
-        crate::td_buffa_release_layout(handle);
-        crate::td_buffa_release_layout(std::ptr::null_mut());
+        ffi_release_layout(handle);
+        ffi_release_layout(std::ptr::null_mut());
     }
     let _ = PANIC;
 }
@@ -1789,19 +1839,19 @@ fn failure_injection_leaks_nothing() {
     // Through the FFI as well: a failed compile leaves no handle behind.
     for n in 0..40 {
         allocation_probe::failing(n, || {
-            let mut r = seam::Result {
+            let mut r = seam::LayoutResult {
                 data: std::ptr::null_mut(),
                 count: 0,
                 capacity: 0,
             };
-            let rp = (&mut r as *mut seam::Result).cast();
-            let status = unsafe { crate::td_buffa_compile_layout(p.as_ptr(), p.len() as u64, rp) };
+            let rp = &mut r as *mut seam::LayoutResult;
+            let status = unsafe { crate::td_buffa_compile_layout(p.as_ptr(), p.len() as u64, rp) }.0;
             assert!(status == 0 || status == ALLOCATION);
             assert_eq!(status == 0, !r.data.is_null());
             if status == 0 {
                 assert_eq!(r.count, 5);
             }
-            unsafe { crate::td_buffa_release_layout(r.data) };
+            unsafe { ffi_release_layout(r.data.cast()) };
         });
     }
 }
@@ -2023,8 +2073,8 @@ fn projection_ffi_normal_and_critical_match_without_allocations() {
     let wire=[8,7,26,3,10,1,b'x',34,3,10,1,b'y'];
     let expected=projected_slab(&c,&wire,&mask,FLAG_BORROWING).unwrap();
     let mut output=vec![0xa5;expected.len()];
-    let mut result=seam::SlabResult {bytes:0,records:0,handles:0,flags:0,error:0,cells:u32::MAX,string_bytes:u32::MAX};
-    for call in [crate::td_buffa_decode_slab,crate::td_buffa_decode_slab_small] {
+    let mut result=seam::SlabResult {bytes:0,records:0,handles:0,flags:seam::SlabFlags::NONE,error:0,cells:u32::MAX,string_bytes:u32::MAX};
+    for call in [ffi_decode_slab,ffi_decode_slab_small] {
         let (status,allocations)=allocation_probe::allocations(|| unsafe {
             call((&c as *const Compiled).cast(),wire.as_ptr(),wire.len() as u64,FLAG_BORROWING,
                 mask.as_ptr(),output.as_mut_ptr(),output.len() as u64,DEPTH,MAX_SLAB,(&mut result as *mut seam::SlabResult).cast())

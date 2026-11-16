@@ -1,5 +1,6 @@
 package dev.elide.truffledata.buffa;
 
+import dev.elide.truffledata.buffa.generated.BuffaConstants;
 import dev.elide.truffledata.buffa.tests.Acceptance;
 import dev.elide.truffledata.protobuf.CellsFixtures;
 import dev.elide.truffledata.protobuf.ProtoPlan;
@@ -104,7 +105,9 @@ public final class CellsAcceptance {
             var otherOutput = backend.allocate(1 << 16)) {
           long sum = 0;
           for (int i = 0; i < calls; i++)
-            sum += backend.writeSlab(prepared, input, output, limits, 1, null);
+            sum +=
+                backend.writeSlab(
+                    prepared, input, output, limits, BuffaConstants.DecodeFlags.OWNING, null);
           double[] rounds = new double[3];
           for (int round = 0; round < rounds.length; round++) {
             long before = bean.getThreadAllocatedBytes(thread);
@@ -116,7 +119,7 @@ public final class CellsAcceptance {
                       other ? otherInput : input,
                       other ? otherOutput : output,
                       limits,
-                      1,
+                      BuffaConstants.DecodeFlags.OWNING,
                       null);
             }
             long after = bean.getThreadAllocatedBytes(thread);

@@ -6,7 +6,6 @@ import dev.elide.truffledata.tape.SvmTape;
 import dev.elide.truffledata.tape.TapeReader;
 import dev.elide.truffledata.yaml.generated.Yaml;
 import org.graalvm.nativeimage.UnmanagedMemory;
-import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 
@@ -60,7 +59,7 @@ class SvmYamlMessage extends YamlMessage implements TapeReader {
   @Override protected final long lexical(long node) { return span(node); }
   @Override protected final byte lexicalByte(long offset) { return textByte(false, offset); }
   @Override protected final void release() {
-    VoidPointer result = WordFactory.pointer(resultAddress);
+    Yaml.YamlResult result = WordFactory.pointer(resultAddress);
     Yaml.release(result);
     UnmanagedMemory.free(result);
   }
