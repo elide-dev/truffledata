@@ -3,6 +3,7 @@ package dev.elide.truffledata.csv.cells;
 import dev.elide.truffledata.csv.CsvIndexing;
 import dev.elide.truffledata.csv.kernel.CsvIndex;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
+import dev.elide.truffledata.csv.kernel.generated.CsvNativeConstants;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,7 +33,7 @@ public final class CsvCellsRoute {
 
   private static CsvIndexing.Provider load(Path library) {
     CellsFfmIndexer.bind(library);
-    int best = CellsFfmIndexer.resolve(0);
+    int best = CellsFfmIndexer.resolve(CsvNativeConstants.Kernel.AUTO);
     if (best < 0) throw new IllegalStateException("No CSV native kernel: " + best);
     String name = "native-" + CsvIndex.kernelName(best) + "-ffm-cells";
     return new CsvIndexing.Provider() {

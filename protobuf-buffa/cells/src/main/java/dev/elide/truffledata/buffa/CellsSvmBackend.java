@@ -3,11 +3,11 @@ package dev.elide.truffledata.buffa;
 import dev.elide.truffledata.Limits;
 import dev.elide.truffledata.buffa.cells.generated.BuffaCellsTruffle;
 import dev.elide.truffledata.buffa.generated.Buffa;
+import dev.elide.truffledata.buffa.generated.BuffaConstants;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.SlabLimits;
 import dev.elide.truffledata.protobuf.SlabMessage;
 import org.graalvm.nativeimage.PinnedObject;
-import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -62,7 +62,7 @@ final class CellsSvmBackend implements BuffaWire.Backend {
       long out,
       long capacity,
       SlabLimits limits,
-      VoidPointer result) {
+      Buffa.SlabResult result) {
     return BuffaCellsTruffle.decodeSlab_Cell.invoke(
         compiled,
         data,
@@ -83,7 +83,7 @@ final class CellsSvmBackend implements BuffaWire.Backend {
         || input.length > limits.criticalBytes()
         || capacity > limits.criticalBytes())
       return BuffaWire.Backend.super.slab(compiled, input, plan, limits, capacity);
-    VoidPointer result = backend.beginSlab();
+    Buffa.SlabResult result = backend.beginSlab();
     boolean scratch = false;
     try {
       for (int attempt = 0; attempt < 2; attempt++) {
@@ -101,7 +101,7 @@ final class CellsSvmBackend implements BuffaWire.Backend {
                         ? backend.emptyInput()
                         : pinnedInput.addressOfArrayElement(0).rawValue(),
                     input.length,
-                    1,
+                    BuffaConstants.DecodeFlags.OWNING,
                     0,
                     capacity == 0 ? 0 : pinnedOutput.addressOfArrayElement(0).rawValue(),
                     capacity,
@@ -113,8 +113,11 @@ final class CellsSvmBackend implements BuffaWire.Backend {
         } finally {
           pinnedInput.close();
         }
-        long bytes = Buffa.SlabResult.bytes(result);
-        if (status == 6 && attempt == 0 && bytes > capacity && bytes <= limits.maxSlabBytes()) {
+        long bytes = result.bytes();
+        if (status == BuffaConstants.Status.NEEDS_CAPACITY
+            && attempt == 0
+            && bytes > capacity
+            && bytes <= limits.maxSlabBytes()) {
           capacity = Math.toIntExact(bytes);
           if (capacity > limits.criticalBytes()) {
             scratch = true;
@@ -142,7 +145,7 @@ final class CellsSvmBackend implements BuffaWire.Backend {
       long compiled, WireInput input, ProtoPlan plan, SlabLimits limits, int capacity) {
     if (!(input.lease.attachment instanceof BuffaSvm.Address address))
       throw new IllegalArgumentException("Input is not SVM native memory");
-    VoidPointer result = backend.beginSlab();
+    Buffa.SlabResult result = backend.beginSlab();
     try {
       for (int attempt = 0; attempt < 2; attempt++) {
         byte[] output = new byte[Math.max(1, capacity)];
@@ -155,17 +158,20 @@ final class CellsSvmBackend implements BuffaWire.Backend {
                   compiled,
                   address.value(),
                   input.size(),
-                  1,
+                  BuffaConstants.DecodeFlags.OWNING,
                   0,
                   pinned.addressOfArrayElement(0).rawValue(),
                   capacity,
                   limits,
                   result);
-          bytes = Buffa.SlabResult.bytes(result);
+          bytes = result.bytes();
         } finally {
           pinned.close();
         }
-        if (status == 6 && attempt == 0 && bytes > capacity && bytes <= limits.maxSlabBytes()) {
+        if (status == BuffaConstants.Status.NEEDS_CAPACITY
+            && attempt == 0
+            && bytes > capacity
+            && bytes <= limits.maxSlabBytes()) {
           capacity = Math.toIntExact(bytes);
           continue;
         }
@@ -194,7 +200,7 @@ final class CellsSvmBackend implements BuffaWire.Backend {
     if (!(input.lease.attachment instanceof BuffaSvm.Address source)
         || !(output.lease.attachment instanceof BuffaSvm.Address destination))
       throw new IllegalArgumentException("Slab arena is not SVM native memory");
-    VoidPointer result = backend.beginSlab();
+    Buffa.SlabResult result = backend.beginSlab();
     try {
       int status =
           decodeSlab(
@@ -211,8 +217,10 @@ final class CellsSvmBackend implements BuffaWire.Backend {
               output.size(),
               limits,
               result);
-      long bytes = Buffa.SlabResult.bytes(result);
-      if (status == 6 && bytes > output.size() && bytes <= limits.maxSlabBytes())
+      long bytes = result.bytes();
+      if (status == BuffaConstants.Status.NEEDS_CAPACITY
+          && bytes > output.size()
+          && bytes <= limits.maxSlabBytes())
         return -Math.toIntExact(bytes);
       BuffaWire.status(status);
       if (bytes < 0 || bytes > output.size())

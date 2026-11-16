@@ -1,5 +1,6 @@
 //! Schema-directed borrowed decoding. The index contains typed values, never Java wire work.
 use super::{ALLOCATION, BUDGET, Field, MALFORMED};
+use crate::seam::{Format, MAX_DEPTH, TYPED_ANY, TYPED_FIELD_MARKER, TYPED_NULL};
 use buffa::encoding::{Tag, WireType, decode_varint};
 use buffa::text::{TokenKind, Tokenizer};
 use std::mem::size_of;
@@ -527,12 +528,12 @@ pub fn decode_reusing(
     native: u64,
     mut fields: Vec<Field>,
 ) -> Result<Vec<Field>> {
-    if depth == 0 || depth > 128 || native > i32::MAX as u64 {
+    if depth == 0 || depth > MAX_DEPTH || native > i32::MAX as u64 {
         return Err(BUDGET);
     }
     // Reserve scratch headroom independently of index growth (including overlapping reallocations).
     // Text token/escape scratch is bounded by input length; the caller owns the payload region.
-    let reserve = if format == 0 {
+    let reserve = if Format(format) == Format::BINARY {
         0
     } else {
         (input.len() as u64).checked_mul(4).ok_or(BUDGET)?
@@ -560,15 +561,15 @@ pub fn decode_reusing(
         depth,
         native,
     };
-    match format {
-        0 => {
+    match Format(format) {
+        Format::BINARY => {
             decoder.binary(0, &mut &input[..], 0, 1)?;
         }
-        1 => {
+        Format::TEXT => {
             let text = super::unicode::validated(input).map_err(|_| MALFORMED)?;
             decoder.text(0, &mut Tokenizer::new(text), 1, false)?;
         }
-        2 => decoder.json()?,
+        Format::JSON => decoder.json()?,
         _ => return Err(MALFORMED),
     }
     Ok(decoder.fields)
@@ -741,15 +742,16 @@ mod tests {
                 s.len() as u64,
                 input.as_ptr(),
                 input.len() as u64,
-                0,
+                Format::BINARY,
                 [].as_mut_ptr(),
                 0,
                 1000,
                 0,
                 4,
                 budget,
-                (result as *mut super::super::seam::Result).cast(),
+                result as *mut super::super::seam::Result,
             )
+            .0
         };
         assert_eq!(call(&mut result, &[8, 1], 8192), 0);
         let pointer = result.data;
@@ -758,7 +760,7 @@ mod tests {
         assert_eq!(status, 0);
         assert_eq!(result.data, pointer);
         assert_eq!(result.count, 1);
-        assert_eq!(unsafe { (*result.data.cast::<Field>()).value }, 2);
+        assert_eq!(unsafe { result.data() }[0].value, 2);
         assert_eq!(call(&mut result, &[8, 128], 8192), MALFORMED);
         assert!(result.data.is_null());
         assert_eq!((result.count, result.capacity), (0, 0));
@@ -767,7 +769,7 @@ mod tests {
         assert_eq!((result.count, result.capacity), (0, 0));
         assert_eq!(call(&mut result, &[8, 4], 8192), 0);
         unsafe {
-            super::super::td_buffa_release((&mut result as *mut super::super::seam::Result).cast())
+            super::super::td_buffa_release(&mut result as *mut super::super::seam::Result)
         };
         assert!(result.data.is_null());
         assert_eq!((result.count, result.capacity), (0, 0));

@@ -24,7 +24,9 @@ using namespace truffledata::csv;
 namespace {
 
 int32_t format(uint8_t delimiter, uint8_t quote, bool quoting) {
-  return delimiter | quote << 8 | (quoting ? 1 << 16 : 0);
+  return truffledata_csv_format_with_quote(
+      truffledata_csv_format_with_delimiter(quoting ? TRUFFLEDATA_CSV_FORMAT_QUOTING : 0, delimiter),
+      quote);
 }
 
 int64_t validate(const std::string& s) {
@@ -38,11 +40,13 @@ int main() {
   // Kernel selection: AUTO resolves to the best kernel; unsupported kernels are refused.
   CHECK(td_csv_kernel(AUTO) == static_cast<int32_t>(best_kernel()));
   CHECK(td_csv_kernel(SCALAR) == SCALAR && td_csv_kernel(SWAR) == SWAR);
-  CHECK(td_csv_kernel(-1) == -1 && td_csv_kernel(99) == -1);
+  CHECK(td_csv_kernel(-1) == TRUFFLEDATA_CSV_KERNEL_UNSUPPORTED);
+  CHECK(td_csv_kernel(99) == TRUFFLEDATA_CSV_KERNEL_UNSUPPORTED);
 #if defined(__x86_64__)
-  CHECK(td_csv_kernel(NEON) == -1);
+  CHECK(td_csv_kernel(NEON) == TRUFFLEDATA_CSV_KERNEL_UNSUPPORTED);
 #else
-  CHECK(td_csv_kernel(AVX2) == -1 && td_csv_kernel(AVX512) == -1);
+  CHECK(td_csv_kernel(AVX2) == TRUFFLEDATA_CSV_KERNEL_UNSUPPORTED);
+  CHECK(td_csv_kernel(AVX512) == TRUFFLEDATA_CSV_KERNEL_UNSUPPORTED);
 #endif
 
   std::string s = "a,\"b\"\"c\"\r\nd";
@@ -51,7 +55,7 @@ int main() {
   int32_t rfc = format(',', '"', true);
   for (int32_t kernel = 0; kernel <= AVX512; kernel++) {
     if (td_csv_kernel(kernel) < 0) {
-      CHECK(td_csv_index(data, s.size(), out.data(), rfc, kernel, 0) == -2);
+      CHECK(td_csv_index(data, s.size(), out.data(), rfc, kernel, 0) == TRUFFLEDATA_CSV_INDEX_BAD_KERNEL);
       continue;
     }
     for (auto call : {td_csv_index, td_csv_index_leaf}) {
@@ -70,19 +74,19 @@ int main() {
     }
   }
   // Argument validation never touches memory.
-  CHECK(td_csv_index(data, s.size(), out.data(), format('\n', '"', true), 0, 0) == -1);
-  CHECK(td_csv_index(data, s.size(), out.data(), format(',', ',', true), 0, 0) == -1);
-  CHECK(td_csv_index(data, s.size(), out.data(), format(',', '\r', true), 0, 0) == -1);
-  CHECK(td_csv_index(data, s.size(), out.data(), rfc | 1 << 17, 0, 0) == -1);
+  CHECK(td_csv_index(data, s.size(), out.data(), format('\n', '"', true), 0, 0) == TRUFFLEDATA_CSV_INDEX_BAD_FORMAT);
+  CHECK(td_csv_index(data, s.size(), out.data(), format(',', ',', true), 0, 0) == TRUFFLEDATA_CSV_INDEX_BAD_FORMAT);
+  CHECK(td_csv_index(data, s.size(), out.data(), format(',', '\r', true), 0, 0) == TRUFFLEDATA_CSV_INDEX_BAD_FORMAT);
+  CHECK(td_csv_index(data, s.size(), out.data(), rfc | 1 << 17, 0, 0) == TRUFFLEDATA_CSV_INDEX_BAD_FORMAT);
   CHECK(td_csv_index(data, s.size(), out.data(), format(',', ',', false), 0, 0) >= 0);
-  CHECK(td_csv_index(data, MAX_CALL_BYTES + 1, out.data(), rfc, 0, 0) == -3);
-  CHECK(td_csv_index(data, s.size(), out.data(), rfc, 0, 32) == -4);
-  CHECK(td_csv_index(data, s.size(), out.data(), rfc, 0, -1) == -4);
+  CHECK(td_csv_index(data, MAX_CALL_BYTES + 1, out.data(), rfc, 0, 0) == TRUFFLEDATA_CSV_INDEX_BAD_LENGTH);
+  CHECK(td_csv_index(data, s.size(), out.data(), rfc, 0, 32) == TRUFFLEDATA_CSV_INDEX_BAD_CARRY);
+  CHECK(td_csv_index(data, s.size(), out.data(), rfc, 0, -1) == TRUFFLEDATA_CSV_INDEX_BAD_CARRY);
   CHECK(td_csv_index(data, 0, out.data(), rfc, 0, 0) == 0);
 
   // UTF-8: fixed cases at the Java validator's offsets.
-  CHECK(validate("") == -1);
-  CHECK(validate("plain ascii, \xC3\xA9 \xE4\xB8\xAD \xF0\x9F\x98\x80 \xF4\x8F\xBF\xBF") == -1);
+  CHECK(validate("") == TRUFFLEDATA_CSV_UTF8_VALID);
+  CHECK(validate("plain ascii, \xC3\xA9 \xE4\xB8\xAD \xF0\x9F\x98\x80 \xF4\x8F\xBF\xBF") == TRUFFLEDATA_CSV_UTF8_VALID);
   CHECK(validate("ab\xC0\x80") == 2);          // overlong
   CHECK(validate("ab\xE0\x80\x80") == 2);      // overlong
   CHECK(validate("a\xED\xA0\x80") == 1);       // surrogate

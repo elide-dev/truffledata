@@ -9,7 +9,6 @@ import dev.elide.truffledata.tape.TypedRecord;
 import java.util.Map;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.UnmanagedMemory;
-import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 
@@ -78,16 +77,16 @@ public final class JsonPlan implements AutoCloseable {
 
   /** Static SVM plan: an unmanaged plan handle and direct {@code @CFunction} calls. */
   private static final class SvmBackend extends Backend {
-    private final VoidPointer handle;
+    private final Json.JsonPlan handle;
 
-    private SvmBackend(VoidPointer handle) {
+    private SvmBackend(Json.JsonPlan handle) {
       this.handle = handle;
     }
 
     static SvmBackend create(TypedLayout layout) {
       int fieldCount = layout.fieldCount;
       PinnedObject[] pins = new PinnedObject[fieldCount];
-      VoidPointer handle = UnmanagedMemory.calloc(Json.JsonPlan.SIZE);
+      Json.JsonPlan handle = UnmanagedMemory.calloc(Json.JsonPlan.SIZE);
       if (handle.isNull()) throw new OutOfMemoryError("JSON plan allocation");
       // The record table follows the field table in the same allocation.
       long tableBytes = (long) Math.max(1, fieldCount) * Json.JsonScalarField.SIZE;
@@ -101,39 +100,41 @@ public final class JsonPlan implements AutoCloseable {
       }
       try {
         for (int r = 0; r < layout.records.length; r++) {
-          VoidPointer plan =
-              (VoidPointer)
+          Json.JsonRecordPlan plan =
+              (Json.JsonRecordPlan)
                   fields.add(
                       WordFactory.unsigned(tableBytes + (long) r * Json.JsonRecordPlan.SIZE));
-          Json.JsonRecordPlan.fields_offset(plan, layout.fieldsOffset[r]);
-          Json.JsonRecordPlan.field_count(plan, layout.records[r].size());
+          plan.fields_offset(layout.fieldsOffset[r]);
+          plan.field_count(layout.records[r].size());
         }
         for (int i = 0; i < fieldCount; i++) {
           byte[] name = layout.names[i];
           // An empty key still needs an addressable backing allocation.
           pins[i] = PinnedObject.create(name.length == 0 ? new byte[1] : name);
-          VoidPointer field =
-              (VoidPointer) fields.add(WordFactory.unsigned((long) i * Json.JsonScalarField.SIZE));
-          Json.JsonScalarField.name(field, pins[i].addressOfArrayElement(0));
-          Json.JsonScalarField.name_length(field, name.length);
-          Json.JsonScalarField.kind(field, layout.kinds[i]);
-          Json.JsonScalarField.flags(field, layout.flags[i]);
-          Json.JsonScalarField.child(field, layout.children[i]);
-          Json.JsonScalarField.minimum(field, layout.minimums[i]);
-          Json.JsonScalarField.maximum(field, layout.maximums[i]);
-          Json.JsonScalarField.unsigned_maximum(field, TypedLayout.UNSIGNED_MAXIMUM);
-          Json.JsonScalarField.max_utf8_bytes(field, TypedLayout.MAX_UTF8_BYTES);
-          Json.JsonScalarField.float_bits(field, layout.floatBits[i]);
-          Json.JsonScalarField.length_unit(field, layout.lengthUnits[i]);
-          Json.JsonScalarField.minimum_length(field, layout.minimumLengths[i]);
-          Json.JsonScalarField.maximum_length(field, layout.maximumLengths[i]);
+          Json.JsonScalarField field =
+              (Json.JsonScalarField)
+                  fields.add(WordFactory.unsigned((long) i * Json.JsonScalarField.SIZE));
+          field.name(pins[i].addressOfArrayElement(0));
+          field.name_length(name.length);
+          field.kind(layout.kinds[i]);
+          field.flags(layout.flags[i]);
+          field.child(layout.children[i]);
+          field.minimum(layout.minimums[i]);
+          field.maximum(layout.maximums[i]);
+          field.unsigned_maximum(TypedLayout.UNSIGNED_MAXIMUM);
+          field.max_utf8_bytes(TypedLayout.MAX_UTF8_BYTES);
+          field.float_bits(layout.floatBits[i]);
+          field.length_unit(layout.lengthUnits[i]);
+          field.minimum_length(layout.minimumLengths[i]);
+          field.maximum_length(layout.maximumLengths[i]);
         }
-        VoidPointer table = (VoidPointer) fields.add(WordFactory.unsigned(tableBytes));
+        Json.JsonRecordPlan table =
+            (Json.JsonRecordPlan) fields.add(WordFactory.unsigned(tableBytes));
         JsonSvm.checkStatus(
             Json.plan_create(
                 table,
                 layout.records.length,
-                (VoidPointer) fields,
+                (Json.JsonScalarField) fields,
                 fieldCount,
                 MAX_NAME_BYTES,
                 handle));
@@ -150,7 +151,7 @@ public final class JsonPlan implements AutoCloseable {
 
     @Override
     TypedOwner decode(byte[] utf8, Schema[] schemas) {
-      VoidPointer result = UnmanagedMemory.calloc(Json.JsonTypedResult.SIZE);
+      Json.JsonTypedResult result = UnmanagedMemory.calloc(Json.JsonTypedResult.SIZE);
       if (result.isNull()) throw new OutOfMemoryError("JSON result allocation");
       try {
         try (PinnedObject input = PinnedObject.create(utf8)) {

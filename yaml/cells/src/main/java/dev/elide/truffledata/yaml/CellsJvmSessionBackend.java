@@ -8,6 +8,7 @@ import dev.elide.truffledata.tape.TypedLayout;
 import dev.elide.truffledata.yaml.cells.generated.YamlCellsJvmFFM;
 import dev.elide.truffledata.yaml.cells.generated.YamlCellsJvmTruffle;
 import dev.elide.truffledata.yaml.generated.YamlAbi;
+import dev.elide.truffledata.yaml.generated.YamlConstants.Status;
 import dev.elide.truffledata.yaml.generated.YamlFFM;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -191,11 +192,7 @@ final class CellsJvmSessionBackend extends YamlSession.Backend {
       JvmSessionBackend.check(status, owned);
       SegmentTape tape = JvmSessionBackend.tape(owned);
       YamlMetadata meta =
-          ResultMetadata.read(
-              JvmSessionBackend.MEMORY,
-              owned.address(),
-              tape.nodeCount(),
-              options.limits().maxAliasExpansion());
+          JvmSessionBackend.metadata(owned, tape.nodeCount(), options.limits().maxAliasExpansion());
       YamlMessage message =
           YamlMessage.create(
               tape,
@@ -268,7 +265,8 @@ final class CellsJvmSessionBackend extends YamlSession.Backend {
   @Override
   protected int streamNext(long stream) {
     int status = YamlCellsJvmTruffle.stream_next_Cell.invoke(stream, backend.decodeFlags(), result);
-    if (status != 8 && status != 9) JvmSessionBackend.check(status, backend.resultSlot());
+    if (status != Status.STREAM_EMPTY && status != Status.STREAM_TRUNCATED)
+      JvmSessionBackend.check(status, backend.resultSlot());
     return status;
   }
 

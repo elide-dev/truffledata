@@ -5,6 +5,7 @@ import dev.elide.truffledata.csv.CsvIndexing;
 import dev.elide.truffledata.csv.kernel.CsvIndex;
 import dev.elide.truffledata.csv.kernel.CsvIndexer;
 import dev.elide.truffledata.csv.kernel.generated.CsvNativeAbi;
+import dev.elide.truffledata.csv.kernel.generated.CsvNativeConstants;
 import dev.elide.truffledata.csv.kernel.generated.CsvNativeFFM;
 import java.lang.foreign.Arena;
 import java.lang.foreign.Linker;
@@ -215,7 +216,11 @@ public final class FfmIndexer extends CsvIndexer implements AutoCloseable {
     this.library = library;
     this.ownsLibrary = ownsLibrary;
     this.kernel = resolved;
-    format = (delimiter & 0xFF) | (quote & 0xFF) << 8 | (quoting ? 1 << 16 : 0);
+    format =
+        CsvNativeConstants.Format.withQuote(
+            CsvNativeConstants.Format.withDelimiter(
+                quoting ? CsvNativeConstants.Format.QUOTING : 0, delimiter),
+            quote);
     name = "native-" + CsvIndex.kernelName(resolved) + "-ffm";
     this.criticalBytes = criticalBytes;
   }
@@ -251,7 +256,8 @@ public final class FfmIndexer extends CsvIndexer implements AutoCloseable {
             (long)
                 library.index.invokeExact(this.input, (long) length, output, format, kernel, carry);
         if (result > 0)
-          MemorySegment.copy(output, ValueLayout.JAVA_INT, 0, out, 0, (int) (result >>> 8));
+          MemorySegment.copy(output, ValueLayout.JAVA_INT, 0, out, 0,
+              (int) (result >>> CsvNativeConstants.INDEX_COUNT_SHIFT));
       }
     } catch (Throwable failure) {
       throw new IllegalStateException(failure);
@@ -308,8 +314,8 @@ public final class FfmIndexer extends CsvIndexer implements AutoCloseable {
 
   private int unpack(long result) {
     if (result < 0) throw new IllegalStateException("CSV native index failed: " + result);
-    carry = result & 0xFF;
-    return (int) (result >>> 8);
+    carry = result & ((1L << CsvNativeConstants.INDEX_COUNT_SHIFT) - 1);
+    return (int) (result >>> CsvNativeConstants.INDEX_COUNT_SHIFT);
   }
 
   private void ensure(int length) {

@@ -2,6 +2,8 @@ package dev.elide.truffledata.json;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.json.generated.Json;
+import dev.elide.truffledata.json.generated.JsonConstants;
+import dev.elide.truffledata.json.generated.JsonConstants.DecodeFlags;
 import dev.elide.truffledata.tape.TapeBorrow;
 import dev.elide.truffledata.tape.TapeSession;
 import dev.elide.truffledata.tape.TapeTextArena;
@@ -10,8 +12,8 @@ import java.util.Objects;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.CCharPointer;
+import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.nativeimage.c.type.VoidPointer;
-import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 import org.jspecify.annotations.Nullable;
 
@@ -38,16 +40,15 @@ import org.jspecify.annotations.Nullable;
 public final class JsonSession extends TapeSession<JsonMessage> {
   /**
    * Inputs of at most this many bytes may decode through a bounded critical (native-leaf) call on
-   * the JVM (performance plan Task E2; {@code TD_JSON_CRITICAL_LIMIT}).
+   * the JVM (performance plan Task E2; json.seam {@code CRITICAL_LIMIT}).
    */
-  public static final int CRITICAL_LIMIT = 4096;
-
-  // TD_JSON_UTF16_INPUT and TD_JSON_LATIN1_INPUT.
-  static final int UTF16_INPUT = 2, LATIN1_INPUT = 8;
+  public static final int CRITICAL_LIMIT = JsonConstants.CRITICAL_LIMIT;
 
   /** The td_json_session_decode input flag of a {@link TapeSession} input encoding. */
   static int inputFlag(int encoding) {
-    return encoding == UTF16 ? UTF16_INPUT : encoding == LATIN1 ? LATIN1_INPUT : 0;
+    return encoding == UTF16
+        ? DecodeFlags.UTF16_INPUT
+        : encoding == LATIN1 ? DecodeFlags.LATIN1_INPUT : 0;
   }
 
   /**
@@ -55,8 +56,10 @@ public final class JsonSession extends TapeSession<JsonMessage> {
    * Adds the JSON-only stream calls to the shared backend.
    */
   abstract static class Backend extends TapeSession.Backend<JsonMessage> {
-    private int directoryFlag = 32;
-    @Override protected final void directories(boolean enabled) { directoryFlag = enabled ? 32 : 0; }
+    private int directoryFlag = DecodeFlags.WANT_DIRECTORIES;
+    @Override protected final void directories(boolean enabled) {
+      directoryFlag = enabled ? DecodeFlags.WANT_DIRECTORIES : 0;
+    }
     final int directoryFlag() { return directoryFlag; }
 
     /** td_json_stream_skip: resumes after a document-level failure; returns the native status. */
@@ -106,32 +109,31 @@ public final class JsonSession extends TapeSession<JsonMessage> {
 
   /** Static-image backend: generated @CFunction bindings, pinned arrays, one unmanaged result. */
   private static final class SvmBackend extends Backend {
-    // TD_JSON_WANT_TEXT.
-    private static final int TEXT = 1;
-    private final VoidPointer session;
-    // Reusable JsonResult for borrowed decodes.
-    private final VoidPointer result;
+    private final Json.JsonSession session;
+    // Reusable JsonResult for borrowed decodes. session_decode and stream_next take it untyped
+    // (json.seam: they overwrite the struct), so those calls pass it as a VoidPointer.
+    private final Json.JsonResult result;
     // The tape reader and lexical accessor every borrow of this session rebinds.
     private final JsonSvm.Borrows borrows = new JsonSvm.Borrows();
 
-    private SvmBackend(VoidPointer session, VoidPointer result) {
+    private SvmBackend(Json.JsonSession session, Json.JsonResult result) {
       this.session = session;
       this.result = result;
     }
 
     static SvmBackend create(JsonLimits limits) {
-      VoidPointer struct = UnmanagedMemory.calloc(Json.JsonLimitsStruct.SIZE);
+      Json.JsonLimitsStruct struct = UnmanagedMemory.calloc(Json.JsonLimitsStruct.SIZE);
       if (struct.isNull()) throw new OutOfMemoryError("JSON session limits allocation");
-      VoidPointer result = WordFactory.nullPointer();
+      Json.JsonResult result = WordFactory.nullPointer();
       try {
         result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
         if (result.isNull()) throw new OutOfMemoryError("JSON session result allocation");
-        Json.JsonLimitsStruct.max_input_bytes(struct, limits.maxInputBytes());
-        Json.JsonLimitsStruct.max_index_bytes(struct, limits.maxIndexBytes());
-        Json.JsonLimitsStruct.max_nodes(struct, limits.maxNodes());
-        Json.JsonLimitsStruct.max_text_bytes(struct, limits.maxTextBytes());
-        Json.JsonLimitsStruct.max_depth(struct, limits.maxDepth());
-        VoidPointer created = Json.session_create(struct);
+        struct.max_input_bytes(limits.maxInputBytes());
+        struct.max_index_bytes(limits.maxIndexBytes());
+        struct.max_nodes(limits.maxNodes());
+        struct.max_text_bytes(limits.maxTextBytes());
+        struct.max_depth(limits.maxDepth());
+        Json.JsonSession created = Json.session_create(struct);
         if (created.isNull()) throw new OutOfMemoryError("JSON session allocation");
         return new SvmBackend(created, result);
       } catch (RuntimeException | Error failure) {
@@ -155,13 +157,13 @@ public final class JsonSession extends TapeSession<JsonMessage> {
                 session,
                 pinned.addressOfArrayElement(offset),
                 length,
-                inputFlag(encoding) | directoryFlag() | (textArray == null ? 0 : TEXT),
+                inputFlag(encoding) | directoryFlag() | (textArray == null ? 0 : DecodeFlags.WANT_TEXT),
                 out == null ? WordFactory.<CCharPointer>nullPointer() : out.addressOfArrayElement(0),
                 textArray == null ? 0 : textArray.length,
-                result);
+                (VoidPointer) result);
       }
       JsonSvm.checkStatus(status);
-      if (text != null) text.table = (Pointer) Json.JsonResult.text_table(result);
+      if (text != null) text.table = result.text_table();
     }
 
     @Override
@@ -181,13 +183,13 @@ public final class JsonSession extends TapeSession<JsonMessage> {
 
     @Override
     protected JsonMessage retain() {
-      VoidPointer owned = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+      Json.JsonResult owned = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
       if (owned.isNull()) {
         Json.session_reset(session);
         throw new OutOfMemoryError("JSON result allocation");
       }
       int status = Json.session_retain(session, owned);
-      if (status != 0) {
+      if (status != JsonConstants.Status.OK) {
         UnmanagedMemory.free(owned);
         Json.session_reset(session);
         JsonSvm.checkStatus(status);
@@ -208,7 +210,7 @@ public final class JsonSession extends TapeSession<JsonMessage> {
 
     @Override
     protected long streamCreate(int maxDocumentBytes, int batchBytes) {
-      VoidPointer stream = Json.stream_create(session, maxDocumentBytes, batchBytes);
+      Json.JsonStream stream = Json.stream_create(session, maxDocumentBytes, batchBytes);
       if (stream.isNull()) throw new OutOfMemoryError("JSON stream allocation");
       return stream.rawValue();
     }
@@ -232,7 +234,7 @@ public final class JsonSession extends TapeSession<JsonMessage> {
 
     @Override
     protected int streamNext(long stream) {
-      return Json.stream_next(WordFactory.pointer(stream), directoryFlag(), result);
+      return Json.stream_next(WordFactory.pointer(stream), directoryFlag(), (VoidPointer) result);
     }
 
 
@@ -254,7 +256,8 @@ public final class JsonSession extends TapeSession<JsonMessage> {
 
   /** Text arena whose per-node table lives in the session's native arena (Task D2). */
   private static final class SvmTextArena extends TapeTextArena {
-    Pointer table = WordFactory.nullPointer();
+    // One u64 per node (json.seam JsonResult.text_table).
+    CLongPointer table = WordFactory.nullPointer();
 
     SvmTextArena(byte[] array) {
       super(array);
@@ -266,7 +269,7 @@ public final class JsonSession extends TapeSession<JsonMessage> {
 
     @Override
     protected long entry(long node) {
-      return table.readLong(WordFactory.signed(node * 8));
+      return table.read(WordFactory.signed(node));
     }
   }
 }

@@ -5,10 +5,18 @@ import dev.elide.truffledata.tape.TapeBorrow;
 import dev.elide.truffledata.tape.TapeTextArena;
 import dev.elide.truffledata.tape.TypedLayout;
 import dev.elide.truffledata.yaml.generated.Yaml;
+import dev.elide.truffledata.yaml.generated.YamlConstants;
+import dev.elide.truffledata.yaml.generated.YamlConstants.DecodeFlags;
+import dev.elide.truffledata.yaml.generated.YamlConstants.Status;
 import java.lang.foreign.MemorySegment;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.UnmanagedMemory;
+import org.graalvm.nativeimage.c.type.CCharPointer;
+import org.graalvm.nativeimage.c.type.CIntPointer;
+import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
@@ -17,19 +25,19 @@ import org.jspecify.annotations.Nullable;
 final class SvmSessionBackend extends YamlSession.Backend {
   private final YamlOptions options;
   private boolean directories = true;
-  private final VoidPointer session;
-  private final VoidPointer result;
+  private final Yaml.YamlSession session;
+  private final Yaml.YamlResult result;
 
   SvmSessionBackend(YamlOptions options) {
     this.options = options;
-    Pointer o = UnmanagedMemory.calloc(Yaml.YamlOptionsStruct.SIZE);
+    Yaml.YamlOptionsStruct o = UnmanagedMemory.calloc(Yaml.YamlOptionsStruct.SIZE);
     if (o.isNull()) throw new OutOfMemoryError("YAML options allocation");
-    VoidPointer allocated = WordFactory.nullPointer();
+    Yaml.YamlResult allocated = WordFactory.nullPointer();
     try {
       allocated = UnmanagedMemory.calloc(Yaml.YamlResult.SIZE);
       if (allocated.isNull()) throw new OutOfMemoryError("YAML result allocation");
       writeOptions(o, options);
-      session = Yaml.session_create((VoidPointer) o);
+      session = Yaml.session_create(o);
       if (session.isNull()) throw new OutOfMemoryError("YAML session allocation");
       result = allocated;
     } catch (RuntimeException | Error failure) {
@@ -40,28 +48,23 @@ final class SvmSessionBackend extends YamlSession.Backend {
     }
   }
 
-  static void writeOptions(Pointer o, YamlOptions options) {
+  /** Fills a zeroed options record (complex_keys stays reject, as YamlOptions has no pairs). */
+  static void writeOptions(Yaml.YamlOptionsStruct o, YamlOptions options) {
     YamlLimits l = options.limits();
-    long[] budgets = {
-      l.maxInputBytes(),
-      l.maxIndexBytes(),
-      l.maxNodes(),
-      l.maxTextBytes(),
-      l.maxAliases(),
-      l.maxAliasExpansion()
-    };
-    for (int i = 0; i < budgets.length; i++) o.writeLong(i * 8, budgets[i]);
-    int[] policies = {
-      l.maxDepth(),
-      options.schema().ordinal(),
-      options.duplicateKeys().ordinal(),
-      options.mergeKeys() ? 1 : 0,
-      options.aliases().ordinal(),
-      options.unknownTags().ordinal(),
-      options.versionDirective().ordinal(),
-      0
-    };
-    for (int i = 0; i < policies.length; i++) o.writeInt(48 + i * 4, policies[i]);
+    o.max_input_bytes(l.maxInputBytes());
+    o.max_index_bytes(l.maxIndexBytes());
+    o.max_nodes(l.maxNodes());
+    o.max_text_bytes(l.maxTextBytes());
+    o.max_aliases(l.maxAliases());
+    o.max_alias_expansion(l.maxAliasExpansion());
+    o.max_depth(l.maxDepth());
+    o.schema(options.schema().code);
+    o.duplicate_keys(options.duplicateKeys().code);
+    o.merge_keys(options.mergeKeys() ? 1 : 0);
+    o.aliases(options.aliases().code);
+    o.unknown_tags(options.unknownTags().code);
+    o.version_directive(options.versionDirective().code);
+    o.complex_keys(YamlConstants.ComplexKeys.REJECT);
   }
 
   @Override
@@ -69,19 +72,22 @@ final class SvmSessionBackend extends YamlSession.Backend {
     return SvmPlanBackend.create(layout, options);
   }
 
-  static void checkTyped(int status, VoidPointer result) {
-    if (status == 2 || status == 4 || status == 6 || status == 7) {
-      Pointer data = (Pointer) result;
-      int length = Math.min(255, data.readInt(128));
-      byte[] message = new byte[length];
-      for (int i = 0; i < length; i++) message[i] = data.readByte(136 + i);
+  static void checkTyped(int status, Yaml.YamlTypedResult result) {
+    if (YamlStatus.detailed(status))
       YamlStatus.checkDetailed(
           status,
-          new String(message, java.nio.charset.StandardCharsets.UTF_8),
-          data.readLong(112),
-          data.readLong(120));
-    }
+          message(result.addressOfError_message(), result.error_message_length()),
+          result.error_line(),
+          result.error_column());
     YamlStatus.checkStatus(status);
+  }
+
+  /** The NUL-terminated error message of a failed result, at most capacity - 1 bytes. */
+  private static String message(CCharPointer text, int published) {
+    int length = Math.min(YamlConstants.ERROR_MESSAGE_CAPACITY - 1, published);
+    byte[] message = new byte[length];
+    for (int i = 0; i < length; i++) message[i] = text.read(i);
+    return new String(message, StandardCharsets.UTF_8);
   }
 
   @Override
@@ -91,17 +97,21 @@ final class SvmSessionBackend extends YamlSession.Backend {
   // backend and makes the decode-path calls through cells. Nothing in this class calls them; they
   // are unreachable in an image built without -Dtruffledata.yaml.cells=true.
 
-  VoidPointer sessionHandle() {
+  Yaml.YamlSession sessionHandle() {
     return session;
   }
 
-  VoidPointer resultSlot() {
+  Yaml.YamlResult resultSlot() {
     return result;
   }
 
+  // session_decode's and stream_next's result stay ptr<void> in yaml.seam (see there): the typed
+  // result slot is passed as a VoidPointer, the same address.
+
   /** The flags every decode of this backend passes: the same expression as its own calls. */
   int decodeFlags() {
-    return (options.retainSource() ? 2 : 0) | (directories ? 4 : 0);
+    return (options.retainSource() ? DecodeFlags.RETAIN_SOURCE : 0)
+        | (directories ? DecodeFlags.WANT_DIRECTORIES : 0);
   }
 
   @Override
@@ -117,27 +127,22 @@ final class SvmSessionBackend extends YamlSession.Backend {
               session,
               pin.addressOfArrayElement(0),
               input.length,
-              (options.retainSource() ? 2 : 0) | (directories ? 4 : 0),
+              decodeFlags(),
               WordFactory.nullPointer(),
               0,
-              result);
+              (VoidPointer) result);
     }
     check(status, result);
     if (text != null) ((NativeText) text).write(session);
   }
 
-  static void check(int status, VoidPointer result) {
-    if (status == 2 || status == 4 || status == 6 || status == 7) {
-      Pointer data = (Pointer) result;
-      int length = Math.min(255, data.readInt(184));
-      byte[] message = new byte[length];
-      for (int i = 0; i < length; i++) message[i] = data.readByte(192 + i);
+  static void check(int status, Yaml.YamlResult result) {
+    if (YamlStatus.detailed(status))
       YamlStatus.checkDetailed(
           status,
-          new String(message, java.nio.charset.StandardCharsets.UTF_8),
-          data.readLong(168),
-          data.readLong(176));
-    }
+          message(result.addressOfError_message(), result.error_message_length()),
+          result.error_line(),
+          result.error_column());
     YamlStatus.checkStatus(status);
   }
 
@@ -152,56 +157,76 @@ final class SvmSessionBackend extends YamlSession.Backend {
   }
 
   private static final class NativeText extends TapeTextArena {
-    private Pointer table = WordFactory.nullPointer();
+    private CLongPointer table = WordFactory.nullPointer();
     NativeText(byte[] bytes) { super(bytes); }
 
-    void write(VoidPointer session) {
-      VoidPointer output = StackValue.get(Yaml.YamlTextResult.SIZE);
+    void write(Yaml.YamlSession session) {
+      Yaml.YamlTextResult output = StackValue.get(Yaml.YamlTextResult.SIZE);
       for (;;) {
         int status;
         byte[] bytes = array();
         try (PinnedObject pin = PinnedObject.create(bytes)) {
           status = Yaml.session_write_text(session, pin.addressOfArrayElement(0), bytes.length, output);
         }
-        if (status == 10) {
-          long required = Yaml.YamlTextResult.required_capacity(output);
+        if (status == Status.TEXT_TOO_SMALL) {
+          long required = output.required_capacity();
           if (required > Integer.MAX_VALUE || required <= bytes.length)
             throw new IllegalArgumentException("YAML text arena capacity");
           ensureCapacity((int) required);
           continue;
         }
         YamlStatus.checkStatus(status);
-        table = (Pointer) Yaml.YamlTextResult.table(output);
+        table = output.table();
         return;
       }
     }
 
     @Override protected long entry(long node) {
-      return table.readLong(WordFactory.signed(node * Long.BYTES));
+      return table.read(WordFactory.signed(node));
     }
   }
 
-  static final ResultMetadata.Memory MEMORY =
-      new ResultMetadata.Memory() {
-        public long pointer(long base, int offset) {
-          return word(base, offset);
-        }
+  /** Copies a live result's metadata through the generated record and counted-view accessors. */
+  static YamlMetadata metadata(Yaml.YamlResult r, long nodeCount, long expansionBudget) {
+    int[] words = new int[Math.toIntExact(nodeCount)];
+    CIntPointer meta = r.yaml_meta();
+    for (int i = 0; i < words.length; i++) words[i] = meta.read(i);
+    int tagCount = Math.toIntExact(r.tag_count());
+    String[] tags = ResultMetadata.texts(tagCount);
+    for (int i = 0; i < tagCount; i++) {
+      Yaml.YamlSpan tag = Yaml.YamlResult_tagsAt(r, i);
+      tags[i] = text(r, tag.offset(), tag.length());
+    }
+    int anchorCount = Math.toIntExact(r.anchor_count());
+    long[] anchors = ResultMetadata.anchors(anchorCount);
+    String[] names = ResultMetadata.texts(anchorCount);
+    for (int i = 0; i < anchorCount; i++) {
+      Yaml.YamlAnchor anchor = Yaml.YamlResult_anchorsAt(r, i);
+      anchors[i] = anchor.node();
+      names[i] = text(r, anchor.offset(), anchor.length());
+    }
+    int directiveCount = Math.toIntExact(r.directive_count());
+    Map<String, String> directives = ResultMetadata.directives(directiveCount);
+    for (int i = 0; i < directiveCount; i++) {
+      Yaml.YamlTagDirective directive = Yaml.YamlResult_directivesAt(r, i);
+      directives.put(
+          text(r, directive.handle_offset(), directive.handle_length()),
+          text(r, directive.prefix_offset(), directive.prefix_length()));
+    }
+    return ResultMetadata.create(
+        words, tags, anchors, names, directives, r.yaml_version(), expansionBudget);
+  }
 
-        public long word(long base, long offset) {
-          return WordFactory.<Pointer>pointer(base).readLong(WordFactory.signed(offset));
-        }
+  /** {@code length} bytes of the result's string table at the unsigned {@code offset}. */
+  private static String text(Yaml.YamlResult r, int offset, int length) {
+    byte[] utf8 = new byte[length];
+    long base = Integer.toUnsignedLong(offset);
+    for (int i = 0; i < length; i++) utf8[i] = Yaml.YamlResult_stringsAt(r, base + i);
+    return new String(utf8, StandardCharsets.UTF_8);
+  }
 
-        public int integer(long base, long offset) {
-          return WordFactory.<Pointer>pointer(base).readInt(WordFactory.signed(offset));
-        }
-
-        public byte octet(long base, long offset) {
-          return WordFactory.<Pointer>pointer(base).readByte(WordFactory.signed(offset));
-        }
-      };
-
-  private static SvmTape tape(VoidPointer r) {
-    return new SvmTape((Pointer) Yaml.YamlResult.view(r));
+  private static SvmTape tape(Yaml.YamlResult r) {
+    return new SvmTape((Pointer) r.view());
   }
 
   private static class Storage implements YamlMessage.Storage {
@@ -209,10 +234,10 @@ final class SvmSessionBackend extends YamlSession.Backend {
     final Pointer source;
     final long length;
 
-    Storage(SvmTape tape, VoidPointer r) {
+    Storage(SvmTape tape, Yaml.YamlResult r) {
       this.tape = tape;
-      source = (Pointer) Yaml.YamlResult.source(r);
-      length = Yaml.YamlResult.source_length(r);
+      source = (Pointer) r.source();
+      length = r.source_length();
     }
 
     public long span(long node) {
@@ -234,27 +259,24 @@ final class SvmSessionBackend extends YamlSession.Backend {
     return new TapeBorrow(
         tape,
         new Storage(tape, result),
-        ResultMetadata.read(
-                MEMORY, result.rawValue(), tape.nodeCount(), options.limits().maxAliasExpansion())
-            .format);
+        metadata(result, tape.nodeCount(), options.limits().maxAliasExpansion()).format);
   }
 
   @Override
   protected YamlMessage retain() {
-    VoidPointer owned = UnmanagedMemory.calloc(Yaml.YamlResult.SIZE);
+    Yaml.YamlResult owned = UnmanagedMemory.calloc(Yaml.YamlResult.SIZE);
     if (owned.isNull()) {
       reset();
       throw new OutOfMemoryError("YAML retained result allocation");
     }
     try {
       YamlStatus.checkStatus(Yaml.session_retain(session, owned));
-      Pointer descriptor = (Pointer) Yaml.YamlResult.view(owned);
+      Pointer descriptor = (Pointer) owned.view();
       long count = SvmYamlMessage.validate(descriptor);
       return SvmYamlMessage.create(
           descriptor,
           owned.rawValue(),
-          ResultMetadata.read(
-              MEMORY, owned.rawValue(), count, options.limits().maxAliasExpansion()));
+          metadata(owned, count, options.limits().maxAliasExpansion()));
     } catch (RuntimeException | Error failure) {
       Yaml.release(owned);
       UnmanagedMemory.free(owned);
@@ -276,7 +298,7 @@ final class SvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected long streamCreate(int maxDocumentBytes, int growth) {
-    VoidPointer stream = Yaml.stream_create(session, maxDocumentBytes, growth);
+    Yaml.YamlStream stream = Yaml.stream_create(session, maxDocumentBytes, growth);
     if (stream.isNull()) throw new OutOfMemoryError("YAML stream allocation");
     return stream.rawValue();
   }
@@ -302,8 +324,8 @@ final class SvmSessionBackend extends YamlSession.Backend {
 
   @Override
   protected int streamNext(long stream) {
-    int status = Yaml.stream_next(WordFactory.pointer(stream), (options.retainSource() ? 2 : 0) | (directories ? 4 : 0), result);
-    if (status != 8 && status != 9) check(status, result);
+    int status = Yaml.stream_next(WordFactory.pointer(stream), decodeFlags(), (VoidPointer) result);
+    if (status != Status.STREAM_EMPTY && status != Status.STREAM_TRUNCATED) check(status, result);
     return status;
   }
 

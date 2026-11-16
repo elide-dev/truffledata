@@ -11,19 +11,20 @@ package(default_visibility = ["//visibility:public"])
 #
 # The cells are generated from seams *derived* from the production //protobuf-buffa/native:buffa.seam
 # (bazel/cells_seam.py): the module line gets the cells options, package and class, and
-# ownership.seam adds Myna 0.18.0 ownership that only the cells carry. Declared (each contract
-# checked against protobuf-buffa/native, see ownership.seam):
-#   - `Layout`: compileLayout is its create (handle written into the result struct's `data`,
-#     success=0), releaseLayout its destroy. The handle field is typed on `LayoutResult`, a copy of
-#     the production `Result` struct, because decode/typed share `Result`; decodeSlab(Small)'s
-#     `compiled` is typed ptr<Layout> (the same C pointer), so a guest passes the owner.
-#   - `Result`, initialized in place by decode (success=0) and destroyed by release.
+# ownership.seam adds the Myna ownership that only the cells carry (the production seam already
+# types every pointer: ptr<Result>, ptr<LayoutResult>, ptr<Layout>). Declared (each contract checked
+# against protobuf-buffa/native, see ownership.seam):
+#   - `Layout`: compileLayout is its create (handle written into LayoutResult.data, success=0),
+#     releaseLayout its destroy; decodeSlab(Small)'s `compiled` is ptr<Layout>, so a guest passes
+#     the owner.
+#   - `Result`, initialized in place by either of its constructors, decode and typed (success=0),
+#     and destroyed by release.
 #   - call borrows (length dropped from the guest signature) on every byte buffer: compileLayout
 #     `schema`; decode `data`; typed/typedReuse `schema`, `data`, `payload`; utf8_to_utf16 `data`;
 #     decodeSlab/decodeSlabSmall `data` and the nullable `out`.
-# Not declared: typed/typedReuse as creates (a struct is one resource and `release` the destroy of
-# one), utf8_to_utf16's `output` (ptr<u16>, not a byte buffer), and decodeSlab's `projection` (no
-# length parameter); those stay pass-through pointers. The routes call `invoke`, which ownership
+# Not declared: typedReuse as a create (it consumes the index already in its struct: an operation
+# on a live resource), utf8_to_utf16's `output` (ptr<u16>, not a byte buffer), and decodeSlab's
+# `projection` (no length parameter); those stay pass-through pointers. The routes call `invoke`, which ownership
 # leaves unchanged, and no destroy cell (which has no `invoke` since Myna 0.18.0). Every import,
 # struct and the C ABI otherwise stay the production ones, so the production fingerprint, bindings
 # and natives are unchanged. Myna folds the `truffle` options and the ownership into the fingerprint, so the
@@ -81,9 +82,12 @@ filegroup(
 filegroup(
     name = "generated_sources",
     srcs = [
+        "generated/jvm/BuffaCellsJvmConstants.java",
         "generated/jvm/BuffaCellsJvmFFM.java",
         "generated/jvm/BuffaCellsJvmTruffle.java",
         "generated/svm/BuffaCells.java",
+        "generated/svm/BuffaCellsConstants.java",
+        "generated/svm/BuffaCellsDirectives.java",
         "generated/svm/BuffaCellsTruffle.java",
     ],
 )
