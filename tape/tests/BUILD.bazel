@@ -3,12 +3,18 @@ load("@rules_java//java:defs.bzl", "java_test")
 # The shared module's own contracts; JSON's suites (//json/tests) exercise it end to end.
 java_test(
     name = "jvm",
-    srcs = ["TapeOwnerTest.java", "CompactTapeTest.java"],
+    srcs = [
+        "CompactTapeTest.java",
+        "TapeBuilderDecimalRawSpanTest.java",
+        "TapeOwnerTest.java",
+    ],
     args = [
         "--class",
         "dev.elide.truffledata.tape.TapeOwnerTest",
         "--class",
         "dev.elide.truffledata.tape.CompactTapeTest",
+        "--class",
+        "dev.elide.truffledata.tape.TapeBuilderDecimalRawSpanTest",
     ],
     jvm_flags = [
         "-Dpolyglot.engine.WarnInterpreterOnly=false",
