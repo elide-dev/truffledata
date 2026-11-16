@@ -4,6 +4,7 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.library.*;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.object.DynamicObject;
+import java.util.HashSet;
 
 /** Live, thread-confined view. Reads revalidate facts after arbitrary source mutation. */
 @ExportLibrary(DataLibrary.class)
@@ -12,6 +13,14 @@ public final class DynamicRecord extends AbstractRow {
 
   public DynamicRecord(DynamicObject object, Schema schema) {
     super(schema);
+    // A name-keyed backing object holds one property per label, so two ordinals sharing a name
+    // would alias the same slot and silently surface another ordinal's value and presence.
+    HashSet<String> seen = new HashSet<>(schema.size());
+    for (int i = 0; i < schema.size(); i++) {
+      String name = schema.field(i).name();
+      if (!seen.add(name))
+        throw new IllegalArgumentException("DynamicRecord requires unique field names: " + name);
+    }
     this.object = object;
   }
 
