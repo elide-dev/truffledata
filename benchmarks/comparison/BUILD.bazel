@@ -752,6 +752,8 @@ genrule(
     srcs = ["cells/cells.seam"],
     outs = [
         "cells/generated/BuffaCells.java",
+        "cells/generated/BuffaCellsConstants.java",
+        "cells/generated/BuffaCellsDirectives.java",
         "cells/generated/BuffaCellsFFM.java",
         "cells/generated/BuffaCellsForeignFeature.java",
         "cells/generated/BuffaCellsTruffle.java",
@@ -774,6 +776,8 @@ java_library(
     testonly = True,
     srcs = [
         "cells/generated/BuffaCells.java",
+        "cells/generated/BuffaCellsConstants.java",
+        "cells/generated/BuffaCellsDirectives.java",
         "cells/generated/BuffaCellsTruffle.java",
     ],
     resource_strip_prefix = "benchmarks/comparison/cells/generated",

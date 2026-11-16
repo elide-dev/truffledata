@@ -76,9 +76,12 @@ package(default_visibility = [
 filegroup(
     name = "generated_sources",
     srcs = [
+        "generated/jvm/JsonCellsJvmConstants.java",
         "generated/jvm/JsonCellsJvmFFM.java",
         "generated/jvm/JsonCellsJvmTruffle.java",
         "generated/svm/JsonCells.java",
+        "generated/svm/JsonCellsConstants.java",
+        "generated/svm/JsonCellsDirectives.java",
         "generated/svm/JsonCellsTruffle.java",
     ],
 )
