@@ -117,6 +117,8 @@ final class Dialect {
   private static final int SCRATCH_BYTES = 4096;
 
   /** Per-thread unescape buffer: 4 KiB plus a word of slack for the ASCII test, kept per thread. */
+  // Per-thread scratch arrays (reused allocations); no context, engine or guest state.
+  @SuppressWarnings("TruffleStaticContextState")
   private static final ThreadLocal<byte @Nullable []> SCRATCH = new ThreadLocal<>();
 
   // ---- Java Character.isWhitespace over UTF-8

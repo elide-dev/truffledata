@@ -3,6 +3,8 @@ package dev.elide.truffledata.json;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import dev.elide.truffledata.json.generated.Json;
 import dev.elide.truffledata.json.generated.JsonAbi;
+import dev.elide.truffledata.json.generated.JsonConstants;
+import dev.elide.truffledata.json.generated.JsonConstants.Status;
 import dev.elide.truffledata.tape.SvmTape;
 import dev.elide.truffledata.tape.TapeBorrow;
 import org.graalvm.nativeimage.ImageInfo;
@@ -10,7 +12,6 @@ import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
-import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 
@@ -42,13 +43,14 @@ public final class JsonSvm {
     verifyAbi();
   }
 
+  /** Maps a json.seam {@code Status} code (JsonConstants: plain literals, so the switch folds). */
   static void checkStatus(int status) {
     switch (status) {
-      case 0 -> {}
-      case 1, 4, 6 ->
+      case Status.OK -> {}
+      case Status.ARGUMENT, Status.SYNTAX, Status.CONTRACT ->
           throw new IllegalArgumentException("Invalid JSON input or contract: " + status);
-      case 2 -> throw new IllegalArgumentException("JSON resource limit");
-      case 3 -> throw new OutOfMemoryError("JSON native allocation");
+      case Status.LIMIT -> throw new IllegalArgumentException("JSON resource limit");
+      case Status.ALLOCATION -> throw new OutOfMemoryError("JSON native allocation");
       default -> throw new IllegalStateException("JSON native status " + status);
     }
   }
@@ -90,7 +92,7 @@ public final class JsonSvm {
     requireRuntime();
     if (utf8.length == 0) throw new IllegalArgumentException("Empty JSON input");
     if (utf8.length > limits.maxInputBytes()) throw new IllegalArgumentException("JSON input limit");
-    VoidPointer result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+    Json.JsonResult result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
     if (result.isNull()) throw new OutOfMemoryError("JSON result allocation");
     try {
       int status;
@@ -130,7 +132,7 @@ public final class JsonSvm {
       throw new IllegalArgumentException("Invalid adopted JSON region");
     JsonLimits limits = JsonLimits.DEFAULT;
     if (length > limits.maxInputBytes()) throw new IllegalArgumentException("JSON input limit");
-    VoidPointer result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+    Json.JsonResult result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
     if (result.isNull()) throw new OutOfMemoryError("JSON result allocation");
     try {
       checkStatus(
@@ -160,7 +162,7 @@ public final class JsonSvm {
    * runtime-compilation blocklist rejects), and lent as a pointer: the cell neither copies nor
    * retains it, and the native decode copies the input into its own padded storage, as the baseline.
    */
-  private static int cellsDecode(byte[] utf8, JsonLimits limits, VoidPointer result) {
+  private static int cellsDecode(byte[] utf8, JsonLimits limits, Json.JsonResult result) {
     PinnedObject pinned = PinnedObject.create(utf8);
     try {
       return JsonCellsRoute.svm()
@@ -171,19 +173,21 @@ public final class JsonSvm {
     }
   }
 
-  private static Pointer descriptor(VoidPointer result) {
-    Pointer descriptor = (Pointer) Json.JsonResult.view(result);
-    if (descriptor.isNull() || descriptor.readInt(0) != 1)
+  private static Pointer descriptor(Json.JsonResult result) {
+    // view is a compact td_tape_view (json.seam TapeView) or, after result_myna, a Myna view:
+    // its version tells them apart, so the field stays untyped and is read as a word here.
+    Pointer descriptor = (Pointer) result.view();
+    if (descriptor.isNull() || descriptor.readInt(0) != JsonConstants.TAPE_VIEW_VERSION)
       throw new IllegalStateException("Unsupported compact tape ABI");
     return descriptor;
   }
 
-  private static JsonMessage publish(VoidPointer result, @org.jspecify.annotations.Nullable Runnable onClose) {
+  private static JsonMessage publish(Json.JsonResult result, @org.jspecify.annotations.Nullable Runnable onClose) {
     return onClose == null ? new SvmJsonMessage(descriptor(result), result.rawValue())
         : new SvmJsonMessage.Adopted(descriptor(result), result.rawValue(), onClose);
   }
 
-  static JsonMessage adoptResult(VoidPointer result) {
+  static JsonMessage adoptResult(Json.JsonResult result) {
     try { return publish(result, null); }
     catch (RuntimeException | Error failure) { release(result.rawValue()); throw failure; }
   }
@@ -191,7 +195,7 @@ public final class JsonSvm {
   /** A borrow ends before the next rebind, so one reader serves the session. */
   static final class Borrows {
     private @org.jspecify.annotations.Nullable SvmTape tape;
-    TapeBorrow borrow(VoidPointer result) {
+    TapeBorrow borrow(Json.JsonResult result) {
       Pointer descriptor = descriptor(result);
       SvmTape reader = tape;
       if (reader == null) tape = reader = new SvmTape(descriptor);
@@ -202,7 +206,7 @@ public final class JsonSvm {
 
   static void release(long address) {
     if (address == 0) return;
-    VoidPointer result = WordFactory.pointer(address);
+    Json.JsonResult result = WordFactory.pointer(address);
     if (JsonCellsRoute.ENABLED) JsonCellsRoute.svm().release(address);
     else Json.release(result);
     UnmanagedMemory.free(result);

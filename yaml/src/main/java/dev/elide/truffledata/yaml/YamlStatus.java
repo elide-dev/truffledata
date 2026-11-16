@@ -1,34 +1,47 @@
 package dev.elide.truffledata.yaml;
 
 import dev.elide.truffledata.tape.TapeSession;
+import dev.elide.truffledata.yaml.generated.YamlConstants.Status;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
- * Status codes of the YAML C ABI and their exceptions, shared by every backend (the static archive,
- * the JVM FFM library and the Java kernel) so each throws the same types and messages.
+ * Status codes of the YAML C ABI (yaml.seam {@code enum Status}) and their exceptions, shared by
+ * every backend (the static archive, the JVM FFM library and the Java kernel) so each throws the
+ * same types and messages.
  */
 final class YamlStatus {
   private YamlStatus() {}
 
   static void checkStatus(int status) {
     switch (status) {
-      case 0 -> {}
-      case 1, 4, 6 ->
+      case Status.OK -> {}
+      case Status.ARGUMENT, Status.SYNTAX, Status.CONTRACT ->
           throw new IllegalArgumentException("Invalid YAML input or contract: " + status);
-      case 2 -> throw new IllegalArgumentException("YAML resource limit");
-      case 3 -> throw new OutOfMemoryError("YAML native allocation");
-      case 7 -> throw new IllegalArgumentException("Multiple YAML documents; use a stream");
-      case 9 -> throw new IllegalArgumentException("Truncated YAML document");
+      case Status.LIMIT -> throw new IllegalArgumentException("YAML resource limit");
+      case Status.ALLOCATION -> throw new OutOfMemoryError("YAML native allocation");
+      case Status.MULTIPLE_DOCUMENTS ->
+          throw new IllegalArgumentException("Multiple YAML documents; use a stream");
+      case Status.STREAM_TRUNCATED -> throw new IllegalArgumentException("Truncated YAML document");
       default -> throw new IllegalStateException("YAML native status " + status);
     }
   }
 
+  /** Whether a failure with this status publishes a message, line and column in its result. */
+  static boolean detailed(int status) {
+    return status == Status.LIMIT
+        || status == Status.SYNTAX
+        || status == Status.CONTRACT
+        || status == Status.MULTIPLE_DOCUMENTS;
+  }
+
   static void checkDetailed(int status, String detail, long line, long column) {
-    if (status == 7) checkStatus(status);
+    if (status == Status.MULTIPLE_DOCUMENTS) checkStatus(status);
     String prefix =
-        status == 2 ? "YAML resource limit: " : status == 4 ? "YAML syntax error: " : "YAML ";
+        status == Status.LIMIT
+            ? "YAML resource limit: "
+            : status == Status.SYNTAX ? "YAML syntax error: " : "YAML ";
     throw new IllegalArgumentException(prefix + detail + " at line " + line + ", column " + column);
   }
 

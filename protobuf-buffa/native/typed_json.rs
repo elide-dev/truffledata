@@ -111,11 +111,11 @@ impl<'a, 'b> Decoder<'a, 'b> {
                 self.json_null(f, json, false)?;
             } else if f.word(8)? & 2 != 0 {
                 let marker = self.push(f, 0, 0)?;
-                self.fields[marker].wire = 100;
+                self.fields[marker].wire = TYPED_FIELD_MARKER;
                 self.json_map(f, json, depth)?;
             } else if f.repeated()? {
                 let marker = self.push(f, 0, 0)?;
-                self.fields[marker].wire = 100;
+                self.fields[marker].wire = TYPED_FIELD_MARKER;
                 json.need(b'[')?;
                 if !json.eat(b']') {
                     loop {
@@ -141,7 +141,7 @@ impl<'a, 'b> Decoder<'a, 'b> {
             return Err(MALFORMED);
         }
         let i = self.push(f, 0, element as u64)?;
-        self.fields[i].wire = 0;
+        self.fields[i].wire = TYPED_NULL;
         Ok(())
     }
     fn json_value(

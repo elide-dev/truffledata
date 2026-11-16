@@ -10,6 +10,7 @@ import dev.elide.truffledata.TargetAbi;
 import dev.elide.truffledata.buffa.cells.generated.BuffaCellsJvmFFM;
 import dev.elide.truffledata.buffa.cells.generated.BuffaCellsJvmTruffle;
 import dev.elide.truffledata.buffa.generated.BuffaAbi;
+import dev.elide.truffledata.buffa.generated.BuffaConstants;
 import dev.elide.truffledata.buffa.generated.BuffaFFM;
 import dev.elide.truffledata.protobuf.ProtoPlan;
 import dev.elide.truffledata.protobuf.SlabLimits;
@@ -220,7 +221,7 @@ final class CellsFfmBackend implements BuffaWire.Backend {
                 decodeSlabSmall,
                 compiled,
                 new HeapBytes(input, false),
-                1,
+                BuffaConstants.DecodeFlags.OWNING,
                 0,
                 new HeapBytes(output, true),
                 limits,
@@ -228,11 +229,14 @@ final class CellsFfmBackend implements BuffaWire.Backend {
         long bytes = slabResult.get(ValueLayout.JAVA_LONG, BuffaFFM.SlabResult_bytes_OFFSET);
         // Fixed stack scratch can overflow within the size bound; retry the same native
         // producer with its ordinary transition and bounded dynamic scratch, never Java.
-        if (status == 2) {
+        if (status == BuffaConstants.Status.BUDGET) {
           scratch = true;
           break;
         }
-        if (status == 6 && attempt == 0 && bytes > capacity && bytes <= limits.maxSlabBytes()) {
+        if (status == BuffaConstants.Status.NEEDS_CAPACITY
+            && attempt == 0
+            && bytes > capacity
+            && bytes <= limits.maxSlabBytes()) {
           capacity = Math.toIntExact(bytes);
           if (capacity > limits.criticalBytes()) {
             scratch = true;
@@ -271,14 +275,17 @@ final class CellsFfmBackend implements BuffaWire.Backend {
                   compiled,
                   live(memory),
                   input.size(),
-                  1,
+                  BuffaConstants.DecodeFlags.OWNING,
                   0,
                   live(output),
                   capacity,
                   limits,
                   slabResult);
           long bytes = slabResult.get(ValueLayout.JAVA_LONG, BuffaFFM.SlabResult_bytes_OFFSET);
-          if (status == 6 && attempt == 0 && bytes > capacity && bytes <= limits.maxSlabBytes()) {
+          if (status == BuffaConstants.Status.NEEDS_CAPACITY
+              && attempt == 0
+              && bytes > capacity
+              && bytes <= limits.maxSlabBytes()) {
             capacity = Math.toIntExact(bytes);
             continue;
           }
@@ -329,7 +336,9 @@ final class CellsFfmBackend implements BuffaWire.Backend {
               limits,
               slabResult);
       long bytes = slabResult.get(ValueLayout.JAVA_LONG, BuffaFFM.SlabResult_bytes_OFFSET);
-      if (status == 6 && bytes > output.size() && bytes <= limits.maxSlabBytes())
+      if (status == BuffaConstants.Status.NEEDS_CAPACITY
+          && bytes > output.size()
+          && bytes <= limits.maxSlabBytes())
         return -Math.toIntExact(bytes);
       BuffaWire.status(status);
       if (bytes < 0 || bytes > output.size())

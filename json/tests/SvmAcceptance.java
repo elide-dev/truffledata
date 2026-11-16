@@ -7,13 +7,14 @@ import dev.elide.myna.values.ValueTape;
 import dev.elide.truffledata.*;
 import dev.elide.truffledata.json.generated.Json;
 import dev.elide.truffledata.json.generated.JsonAbi;
+import dev.elide.truffledata.json.generated.JsonConstants;
+import dev.elide.truffledata.json.generated.JsonConstants.Status;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
-import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.Pointer;
 
 /** Executes generated static bindings and Myna's direct reader in a real native image. */
@@ -22,7 +23,7 @@ public final class SvmAcceptance {
     if (!condition) throw new AssertionError("SVM JSON acceptance");
   }
 
-  private static int decode(String source, VoidPointer result) {
+  private static int decode(String source, Json.JsonResult result) {
     byte[] input = source.getBytes(StandardCharsets.UTF_8);
     try (PinnedObject pinned = PinnedObject.create(input)) {
       int status =
@@ -40,9 +41,9 @@ public final class SvmAcceptance {
     }
   }
 
-  private static ValueTape tape(VoidPointer result) {
-    Pointer descriptor = (Pointer) Json.JsonResult.view(result);
-    require(descriptor.readInt(0) == 1);
+  private static ValueTape tape(Json.JsonResult result) {
+    Pointer descriptor = (Pointer) result.view();
+    require(descriptor.readInt(0) == JsonConstants.TAPE_VIEW_VERSION);
     ValueTape tape = new dev.elide.truffledata.tape.TapeBorrow(new dev.elide.truffledata.tape.SvmTape(descriptor), dev.elide.truffledata.tape.TapeFormat.of("JSON")).toMyna();
     tape.validate();
     return tape;
@@ -533,10 +534,10 @@ public final class SvmAcceptance {
   }
 
   private static void typed() {
-    VoidPointer fields =
+    Json.JsonScalarField fields =
         UnmanagedMemory.calloc(Json.JsonScalarField.SIZE + Json.JsonRecordPlan.SIZE);
-    VoidPointer plan = UnmanagedMemory.calloc(Json.JsonPlan.SIZE);
-    VoidPointer result = UnmanagedMemory.calloc(Json.JsonTypedResult.SIZE);
+    Json.JsonPlan plan = UnmanagedMemory.calloc(Json.JsonPlan.SIZE);
+    Json.JsonTypedResult result = UnmanagedMemory.calloc(Json.JsonTypedResult.SIZE);
     if (fields.isNull() || plan.isNull() || result.isNull()) {
       if (fields.isNonNull()) UnmanagedMemory.free(fields);
       if (plan.isNonNull()) UnmanagedMemory.free(plan);
@@ -545,33 +546,35 @@ public final class SvmAcceptance {
     }
     try {
       try (var name = CTypeConversion.toCString("n")) {
-        Json.JsonScalarField.name(fields, name.get());
-        Json.JsonScalarField.name_length(fields, 1);
-        Json.JsonScalarField.kind(fields, 1);
-        Json.JsonScalarField.flags(fields, 1);
-        Json.JsonScalarField.minimum(fields, -128);
-        Json.JsonScalarField.maximum(fields, 127);
-        Json.JsonScalarField.child(fields, -1);
-        VoidPointer root = (VoidPointer) ((Pointer) fields).add(Json.JsonScalarField.SIZE);
-        Json.JsonRecordPlan.field_count(root, 1);
-        require(Json.plan_create(root, 1, fields, 1, 1, plan) == 0);
+        fields.name(name.get());
+        fields.name_length(1);
+        fields.kind(JsonConstants.FieldKind.INT64);
+        fields.flags(JsonConstants.FieldFlags.REQUIRED);
+        fields.minimum(-128);
+        fields.maximum(127);
+        fields.child(JsonConstants.NO_CHILD);
+        Json.JsonRecordPlan root =
+            (Json.JsonRecordPlan) ((Pointer) fields).add(Json.JsonScalarField.SIZE);
+        root.field_count(1);
+        require(Json.plan_create(root, 1, fields, 1, 1, plan) == Status.OK);
       }
       byte[] input = "{\"n\":127}".getBytes(StandardCharsets.UTF_8);
       try (var pinned = PinnedObject.create(input)) {
         require(
             Json.typed_decode(
                     plan, pinned.addressOfArrayElement(0), input.length, 1024, 1024, result)
-                == 0);
+                == Status.OK);
       }
       Json.plan_release(plan);
-      require(Json.JsonTypedResult.present(result) == 1);
-      require(Json.JsonTypedResult.nulls(result) == 0);
-      require(Json.JsonTypedResult.count(result) == 1);
-      require(Json.JsonScalarSlot.bits(Json.JsonTypedResult.slots(result)) == 127);
-      require(Json.JsonTypedResult.index_allocations(result) == 1);
+      require(result.present() == 1);
+      require(result.nulls() == 0);
+      require(result.count() == 1);
+      // The counted view JsonTypedResult.slots/count.
+      require(Json.JsonTypedResult_slotsAt(result, 0).bits() == 127);
+      require(result.index_allocations() == 1);
       Json.typed_release(result);
       Json.typed_release(result);
-      require(Json.JsonTypedResult.owner(result).isNull());
+      require(result.owner().isNull());
     } finally {
       Json.typed_release(result);
       Json.plan_release(plan);
@@ -995,12 +998,12 @@ public final class SvmAcceptance {
     try (var message = dev.elide.truffledata.json.JsonSvm.decode(json.toString().getBytes(StandardCharsets.UTF_8))) {
       checkNativeDirectoryHints((dev.elide.truffledata.tape.TapeReader) message, names);
     }
-    VoidPointer result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+    Json.JsonResult result = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
     if (result.isNull()) throw new OutOfMemoryError();
     try {
-      require(decode(json.toString(), result) == 0);
+      require(decode(json.toString(), result) == Status.OK);
       checkNativeDirectoryHints(
-          new dev.elide.truffledata.tape.SvmTape((Pointer) Json.JsonResult.view(result)), names);
+          new dev.elide.truffledata.tape.SvmTape((Pointer) result.view()), names);
     } finally {
       Json.release(result);
       UnmanagedMemory.free(result);
@@ -1047,9 +1050,9 @@ public final class SvmAcceptance {
     String linked = CTypeConversion.toJavaString(Json.fingerprint());
     require(linked.equals(JsonAbi.fingerprint(charUnsigned)));
     require(!linked.equals(JsonAbi.fingerprint(!charUnsigned)));
-    VoidPointer first = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+    Json.JsonResult first = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
     if (first.isNull()) throw new OutOfMemoryError();
-    VoidPointer second = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
+    Json.JsonResult second = UnmanagedMemory.calloc(Json.JsonResult.SIZE);
     if (second.isNull()) {
       UnmanagedMemory.free(first);
       throw new OutOfMemoryError();
@@ -1068,22 +1071,22 @@ public final class SvmAcceptance {
       require(view.numberText(number).equals("1e999999999999999999"));
       require(view.find(0, ValueTape.Utf8Key.of("absent")) == -1);
       require(
-          Json.JsonResult.index_peak_bytes(first) >= Json.JsonResult.index_retained_bytes(first));
-      require(decode("[]", first) == 1);
+          first.index_peak_bytes() >= first.index_retained_bytes());
+      require(decode("[]", first) == Status.ARGUMENT);
       for (String source :
           new String[] {"true", "null", "\"short\"", "[]", "{}", "-12.5e2", "[0,{\"x\":false}]"}) {
         require(decode(source, second) == 0);
         tape(second);
         Json.release(second);
         Json.release(second);
-        require(Json.JsonResult.owner(second).isNull());
+        require(second.owner().isNull());
       }
       require(view.stringValue(text).equals("a long escaped string 中 😀"));
       for (String source :
           new String[] {"[1,]", "{\"a\":1,\"\\u0061\":2}", "[01]", "{} true", "\"\\uD800\""}) {
-        require(decode(source, second) == 4);
-        require(Json.JsonResult.owner(second).isNull());
-        require(Json.JsonResult.view(second).isNull());
+        require(decode(source, second) == Status.SYNTAX);
+        require(second.owner().isNull());
+        require(second.view().isNull());
       }
     } finally {
       Json.release(second);

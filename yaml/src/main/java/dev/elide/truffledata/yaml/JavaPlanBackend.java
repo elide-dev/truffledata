@@ -9,6 +9,8 @@ import dev.elide.truffledata.yaml.ScalarResolver.Kind;
 import dev.elide.truffledata.yaml.ScalarResolver.Scalar;
 import dev.elide.truffledata.yaml.ScalarResolver.Tag;
 import dev.elide.truffledata.yaml.events.YamlEventSource;
+import dev.elide.truffledata.yaml.generated.YamlConstants.FieldKind;
+import dev.elide.truffledata.yaml.generated.YamlConstants.Status;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -21,7 +23,13 @@ import java.util.Map;
  * same contract checks, alias-expansion budget and messages.
  */
 final class JavaPlanBackend extends YamlPlan.Backend {
-  private static final int BOOLEAN = 0, INT64 = 1, UINT64 = 2, FLOAT64 = 3, STRING = 4, RECORD = 5;
+  // yaml.seam's enum FieldKind (YamlScalarField.kind).
+  private static final int BOOLEAN = FieldKind.BOOLEAN,
+      INT64 = FieldKind.INT64,
+      UINT64 = FieldKind.UINT64,
+      FLOAT64 = FieldKind.FLOAT64,
+      STRING = FieldKind.STRING,
+      RECORD = FieldKind.RECORD;
   private static final int MAX_PLAN_DEPTH = 32;
 
   private final YamlEventSource source;
@@ -47,7 +55,7 @@ final class JavaPlanBackend extends YamlPlan.Backend {
                 || (layout.lengthUnits[at] != 0 && (layout.kinds[at] != STRING
                     || Long.compareUnsigned(layout.minimumLengths[at], layout.maximumLengths[at]) > 0))
                 || ((layout.kinds[at] == RECORD) != (layout.children[at] != TypedLayout.NO_CHILD));
-        if (bad) YamlStatus.checkStatus(1);
+        if (bad) YamlStatus.checkStatus(Status.ARGUMENT);
       }
       ordinals[r] = names;
     }
@@ -57,9 +65,9 @@ final class JavaPlanBackend extends YamlPlan.Backend {
 
   // Recursive plans and plans deeper than 32 records are rejected, as native plan creation does.
   private int measure(int record, int level, byte[] depths) {
-    if (level > MAX_PLAN_DEPTH) YamlStatus.checkStatus(1);
+    if (level > MAX_PLAN_DEPTH) YamlStatus.checkStatus(Status.ARGUMENT);
     final byte visiting = -1;
-    if (depths[record] == visiting) YamlStatus.checkStatus(1);
+    if (depths[record] == visiting) YamlStatus.checkStatus(Status.ARGUMENT);
     if (depths[record] == 0) {
       depths[record] = visiting;
       int measured = 1;
@@ -70,7 +78,7 @@ final class JavaPlanBackend extends YamlPlan.Backend {
       }
       depths[record] = (byte) measured;
     }
-    if (level - 1 + depths[record] > MAX_PLAN_DEPTH) YamlStatus.checkStatus(1);
+    if (level - 1 + depths[record] > MAX_PLAN_DEPTH) YamlStatus.checkStatus(Status.ARGUMENT);
     return depths[record];
   }
 

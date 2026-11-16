@@ -146,9 +146,19 @@ filegroup(
     srcs = [
         "generated/Yaml.java",
         "generated/YamlAbi.java",
+        "generated/YamlConstants.java",
+        "generated/YamlDirectives.java",
         "generated/YamlFFM.java",
     ],
     visibility = ["//visibility:public"],
+)
+
+# The seam's integer protocol alone (<Class>Constants: literals, no imports, no initializer), for
+# //yaml:constants.
+filegroup(
+    name = "java_constants",
+    srcs = ["generated/YamlConstants.java"],
+    visibility = ["//yaml:__subpackages__"],
 )
 
 filegroup(
