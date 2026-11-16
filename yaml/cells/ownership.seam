@@ -1,5 +1,7 @@
 # Myna ownership for the YAML cells (bazel/cells_seam.py; Myna 0.18.0). Production yaml.seam, its
 # fingerprint, bindings and natives are unchanged: only the cells projection carries these lines.
+# Production declares the YamlSession and YamlStream opaque handles and types every struct and
+# handle pointer itself (since Myna's constants release), so the overlay carries ownership only.
 #
 # Every claim below is an explicit contract of yaml/native/api.cc and the headers it includes.
 #
@@ -17,9 +19,6 @@
 #
 # Threading: every resource is `confined`. Sessions and streams are serialized by contract and do
 # no locking (api.h), and results and plans have no synchronization of their own.
-
-opaque YamlSession
-opaque YamlStream
 
 # session_create copies YamlOptionsStruct and keeps nothing of it; it returns null on invalid
 # options or allocation failure. A stream keeps a reference to its session (stream.h
@@ -60,29 +59,25 @@ borrow session_write_text text_out length=text_capacity lifetime=call
 borrow stream_feed data length=length lifetime=call
 borrow typed_decode data length=length lifetime=call
 
-edit import session_create return=ptr<YamlSession> +nounwind=true@explicit_contract
+edit import session_create +nounwind=true@explicit_contract
 edit import session_release +nounwind=true@explicit_contract
-edit param session_release.session type=ptr<YamlSession> ownership=transferred_to_callee
-edit import stream_create return=ptr<YamlStream> +nounwind=true@explicit_contract
-edit param stream_create.session type=ptr<YamlSession>
+edit param session_release.session ownership=transferred_to_callee
+edit import stream_create +nounwind=true@explicit_contract
 edit import stream_release +nounwind=true@explicit_contract
-edit param stream_release.stream type=ptr<YamlStream> ownership=transferred_to_callee
+edit param stream_release.stream ownership=transferred_to_callee
 
 edit import session_retain +nounwind=true@explicit_contract
-edit param session_retain.session type=ptr<YamlSession> +nocapture=true@explicit_contract
-edit param session_retain.result type=ptr<YamlResult>
+edit param session_retain.session +nocapture=true@explicit_contract
 edit import release +nounwind=true@explicit_contract
-edit param release.result type=ptr<YamlResult> ownership=transferred_to_callee
+edit param release.result ownership=transferred_to_callee
 edit import plan_create +nounwind=true@explicit_contract
-edit param plan_create.result type=ptr<YamlPlan>
 edit import plan_release +nounwind=true@explicit_contract
-edit param plan_release.plan type=ptr<YamlPlan> ownership=transferred_to_callee
+edit param plan_release.plan ownership=transferred_to_callee
 edit import typed_decode +nounwind=true@explicit_contract
-edit param typed_decode.plan type=ptr<YamlPlan> +nocapture=true@explicit_contract
+edit param typed_decode.plan +nocapture=true@explicit_contract
 edit param typed_decode.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
-edit param typed_decode.result type=ptr<YamlTypedResult>
 edit import typed_release +nounwind=true@explicit_contract
-edit param typed_release.result type=ptr<YamlTypedResult> ownership=transferred_to_callee
+edit param typed_release.result ownership=transferred_to_callee
 
 edit import session_decode +nounwind=true@explicit_contract
 edit param session_decode.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
@@ -91,12 +86,3 @@ edit import session_write_text +nounwind=true@explicit_contract
 edit param session_write_text.text_out +nocapture=true@explicit_contract
 edit import stream_feed +nounwind=true@explicit_contract
 edit param stream_feed.data +nocapture=true@explicit_contract +readonly=true@explicit_contract
-
-# The session and stream parameters of the other imports name their resource, so a guest passes
-# the owner (a parameter typed ptr<void> refuses every owner).
-edit param session_decode.session type=ptr<YamlSession>
-edit param session_write_text.session type=ptr<YamlSession>
-edit param session_reset.session type=ptr<YamlSession>
-edit param stream_feed.stream type=ptr<YamlStream>
-edit param stream_finish.stream type=ptr<YamlStream>
-edit param stream_next.stream type=ptr<YamlStream>

@@ -1,4 +1,123 @@
 module truffledata_yaml abi=5 target=x86_64-unknown-linux-gnu java_package=dev.elide.truffledata.yaml.generated java_class=Yaml c_library=truffledata_yaml c_library_static=true
+# The integer protocol of the C ABI. api.h, api.cc and the Java bindings take every code, flag and
+# limit below from the generated seam.h and <Class>Constants; nothing else defines these numbers.
+#
+# Status codes, as JSON's plus the YAML ones. No C++ exception crosses the C boundary.
+enum Status type=i32
+  value ok = 0
+  value argument = 1
+  value limit = 2
+  value allocation = 3
+  value syntax = 4
+  value internal = 5
+  value contract = 6
+  value multiple_documents = 7
+  value stream_empty = 8
+  value stream_truncated = 9
+  value text_too_small = 10
+end
+# session_decode and stream_next flags. want_utf16_text and session_decode's inline text arguments
+# stay reserved (rejected): use session_write_text after decode.
+flags DecodeFlags type=u32
+  bit want_utf16_text = 0
+  bit retain_source = 1
+  bit want_directories = 2
+end
+# YamlOptionsStruct policies (YamlOptions on the Java side).
+enum Schema type=u32
+  value core = 0
+  value json = 1
+  value failsafe = 2
+  value yaml_1_1 = 3
+end
+# pairs is not in YamlOptions yet: a mapping with a duplicate key (or, under complex_keys pairs, a
+# collection key) becomes an ARRAY of 2-element [key, value] ARRAYs with the pair style.
+enum DuplicateKeys type=u32
+  value reject = 0
+  value last_wins = 1
+  value pairs = 2
+end
+enum ComplexKeys type=u32
+  value reject = 0
+  value pairs = 1
+end
+enum Aliases type=u32
+  value allow = 0
+  value reject = 1
+end
+enum UnknownTags type=u32
+  value preserve = 0
+  value reject = 1
+end
+enum VersionDirective type=u32
+  value ignore = 0
+  value honor = 1
+end
+# YamlOptionsStruct.max_depth is at most this.
+const MAX_DEPTH type=u32 value=128
+# Error messages are NUL-terminated in a fixed buffer at offsetof(<result>, error_message).
+const ERROR_MESSAGE_CAPACITY type=u32 value=256
+# YamlResult.document_flags.
+flags DocumentFlags type=u32
+  bit explicit_start = 0
+  bit explicit_end = 1
+  bit nonfinite = 2
+  bit source_retained = 3
+  bit present = 4
+  bit schema_1_1 = 5
+end
+# One yaml_meta word per compact tape word (payload entries zero). tag is the 1-based index into
+# `tags` (0 none) or, on aliases, private producer bookkeeping (consumers resolve the REF word).
+enum Style type=u32
+  value plain = 0
+  value single_quoted = 1
+  value double_quoted = 2
+  value literal = 3
+  value folded = 4
+  value block = 5
+  value flow = 6
+  value pair = 7
+end
+enum KeyKind type=u32
+  value string = 0
+  value null = 1
+  value boolean = 2
+  value integer = 3
+  value floating = 4
+end
+flags Meta type=u32
+  range style = 0..2 enum=Style
+  bit anchored = 3
+  bit alias = 4
+  range key_kind = 5..7 enum=KeyKind
+  range tag = 8..31
+end
+# Typed plans (YamlScalarField).
+enum FieldKind type=u32
+  value boolean = 0
+  value int64 = 1
+  value uint64 = 2
+  value float64 = 3
+  value string = 4
+  value record = 5
+end
+flags FieldFlags type=u32
+  bit required = 0
+  bit nullable = 1
+  bit repeated = 2
+end
+enum LengthUnit type=u32
+  value unknown = 0
+  value utf16 = 1
+  value scalar_values = 2
+end
+# YamlScalarField.child of a non-record field.
+const NO_CHILD type=u32 value=0xffffffff
+# plan_create limits: records per plan and fields per record.
+const MAX_PLAN_RECORDS type=u64 value=65536
+const MAX_RECORD_FIELDS type=u64 value=64
+opaque YamlSession
+opaque YamlStream
 struct YamlResult size=448 align=8
   field owner type=ptr<void> offset=0
   field view type=ptr<void> offset=8
@@ -9,19 +128,19 @@ struct YamlResult size=448 align=8
   field index_allocations type=u64 offset=48
   field parser_input_capacity type=u64 offset=56
   field control_bytes type=u64 offset=64
-  field yaml_meta type=ptr<void> offset=72
-  field tags type=ptr<void> offset=80
+  field yaml_meta type=ptr<u32> offset=72
+  field tags type=ptr<YamlSpan> offset=80 count=tag_count
   field tag_count type=u64 offset=88
-  field anchors type=ptr<void> offset=96
+  field anchors type=ptr<YamlAnchor> offset=96 count=anchor_count
   field anchor_count type=u64 offset=104
-  field strings type=ptr<u8> offset=112
+  field strings type=ptr<u8> offset=112 count=strings_length
   field strings_length type=u64 offset=120
-  field directives type=ptr<void> offset=128
+  field directives type=ptr<YamlTagDirective> offset=128 count=directive_count
   field directive_count type=u64 offset=136
-  field source type=ptr<u8> offset=144
+  field source type=ptr<u8> offset=144 count=source_length
   field source_length type=u64 offset=152
   field yaml_version type=u32 offset=160
-  field document_flags type=u32 offset=164
+  field document_flags type=u32 offset=164 flags=DocumentFlags
   field error_line type=u64 offset=168
   field error_column type=u64 offset=176
   field error_message_length type=u32 offset=184
@@ -35,13 +154,13 @@ struct YamlOptionsStruct size=80 align=8
   field max_aliases type=u64 offset=32
   field max_alias_expansion type=u64 offset=40
   field max_depth type=u32 offset=48
-  field schema type=u32 offset=52
-  field duplicate_keys type=u32 offset=56
+  field schema type=u32 offset=52 enum=Schema
+  field duplicate_keys type=u32 offset=56 enum=DuplicateKeys
   field merge_keys type=u32 offset=60
-  field aliases type=u32 offset=64
-  field unknown_tags type=u32 offset=68
-  field version_directive type=u32 offset=72
-  field complex_keys type=u32 offset=76
+  field aliases type=u32 offset=64 enum=Aliases
+  field unknown_tags type=u32 offset=68 enum=UnknownTags
+  field version_directive type=u32 offset=72 enum=VersionDirective
+  field complex_keys type=u32 offset=76 enum=ComplexKeys
 end
 struct YamlSpan size=8 align=4
   field offset type=u32 offset=0
@@ -61,74 +180,74 @@ end
 import fingerprint symbol=td_yaml_fingerprint return=ptr<u8> error=no_failure native_leaf=true@explicit_contract
 end
 import release symbol=td_yaml_release return=void error=no_failure native_leaf=false@explicit_contract
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<YamlResult> nullable=false ownership=borrowed access=read_write
 end
-import session_create symbol=td_yaml_session_create return=ptr<void> error=no_failure native_leaf=false@explicit_contract
-  param options type=ptr<void> nullable=false ownership=borrowed access=read
+import session_create symbol=td_yaml_session_create return=ptr<YamlSession> error=no_failure native_leaf=false@explicit_contract
+  param options type=ptr<YamlOptionsStruct> nullable=false ownership=borrowed access=read
 end
-import session_decode symbol=td_yaml_session_decode return=i32 error=no_failure native_leaf=false@explicit_contract
-  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+import session_decode symbol=td_yaml_session_decode return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<YamlSession> nullable=false ownership=borrowed access=read_write
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64
-  param flags type=u32
+  param flags type=u32 flags=DecodeFlags
   param text_out type=ptr<u8> nullable=true ownership=borrowed access=read_write
   param text_capacity type=u64
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<YamlResult> nullable=false ownership=borrowed access=read_write
 end
 struct YamlTextResult size=24 align=8
-  field table type=ptr<void> offset=0
+  field table type=ptr<u64> offset=0
   field required_capacity type=u64 offset=8
   field bytes_written type=u64 offset=16
 end
-import session_write_text symbol=td_yaml_session_write_text return=i32 error=no_failure native_leaf=false@explicit_contract
-  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+import session_write_text symbol=td_yaml_session_write_text return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<YamlSession> nullable=false ownership=borrowed access=read_write
   param text_out type=ptr<u8> nullable=true ownership=borrowed access=read_write
   param text_capacity type=u64
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<YamlTextResult> nullable=false ownership=borrowed access=read_write
 end
-import session_retain symbol=td_yaml_session_retain return=i32 error=no_failure native_leaf=false@explicit_contract
-  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+import session_retain symbol=td_yaml_session_retain return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<YamlSession> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<YamlResult> nullable=false ownership=borrowed access=read_write
 end
 import session_reset symbol=td_yaml_session_reset return=void error=no_failure native_leaf=true@explicit_contract
-  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param session type=ptr<YamlSession> nullable=false ownership=borrowed access=read_write
 end
 import session_release symbol=td_yaml_session_release return=void error=no_failure native_leaf=false@explicit_contract
-  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param session type=ptr<YamlSession> nullable=false ownership=borrowed access=read_write
 end
-import stream_create symbol=td_yaml_stream_create return=ptr<void> error=no_failure native_leaf=false@explicit_contract
-  param session type=ptr<void> nullable=false ownership=borrowed access=read_write
+import stream_create symbol=td_yaml_stream_create return=ptr<YamlStream> error=no_failure native_leaf=false@explicit_contract
+  param session type=ptr<YamlSession> nullable=false ownership=borrowed access=read_write
   param max_document_bytes type=u64
   param buffer_bytes type=u64
 end
 import stream_feed symbol=td_yaml_stream_feed return=u64 error=no_failure native_leaf=false@explicit_contract
-  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param stream type=ptr<YamlStream> nullable=false ownership=borrowed access=read_write
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64
 end
 import stream_finish symbol=td_yaml_stream_finish return=void error=no_failure native_leaf=false@explicit_contract
-  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param stream type=ptr<YamlStream> nullable=false ownership=borrowed access=read_write
 end
-import stream_next symbol=td_yaml_stream_next return=i32 error=no_failure native_leaf=false@explicit_contract
-  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
-  param flags type=u32
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+import stream_next symbol=td_yaml_stream_next return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
+  param stream type=ptr<YamlStream> nullable=false ownership=borrowed access=read_write
+  param flags type=u32 flags=DecodeFlags
+  param result type=ptr<YamlResult> nullable=false ownership=borrowed access=read_write
 end
 import stream_release symbol=td_yaml_stream_release return=void error=no_failure native_leaf=false@explicit_contract
-  param stream type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param stream type=ptr<YamlStream> nullable=false ownership=borrowed access=read_write
 end
 
 struct YamlScalarField size=88 align=8
-  field name type=ptr<u8> offset=0
+  field name type=ptr<u8> offset=0 count=name_length
   field name_length type=u64 offset=8
-  field kind type=u32 offset=16
-  field flags type=u32 offset=20
+  field kind type=u32 offset=16 enum=FieldKind
+  field flags type=u32 offset=20 flags=FieldFlags
   field minimum type=i64 offset=24
   field maximum type=i64 offset=32
   field unsigned_maximum type=u64 offset=40
   field max_utf8_bytes type=u64 offset=48
   field float_bits type=u32 offset=56
-  field length_unit type=u32 offset=60
+  field length_unit type=u32 offset=60 enum=LengthUnit
   field minimum_length type=u64 offset=64
   field maximum_length type=u64 offset=72
   field child type=u32 offset=80
@@ -148,14 +267,14 @@ struct YamlPlan size=8 align=8
 end
 struct YamlScalarSlot size=40 align=8
   field bits type=u64 offset=0
-  field text type=ptr<u8> offset=8
+  field text type=ptr<u8> offset=8 count=text_length
   field text_length type=u64 offset=16
-  field lexical type=ptr<u8> offset=24
+  field lexical type=ptr<u8> offset=24 count=lexical_length
   field lexical_length type=u64 offset=32
 end
 struct YamlTypedResult size=392 align=8
   field owner type=ptr<void> offset=0
-  field slots type=ptr<void> offset=8
+  field slots type=ptr<YamlScalarSlot> offset=8 count=count
   field count type=u64 offset=16
   field present type=u64 offset=24
   field nulls type=u64 offset=32
@@ -166,31 +285,31 @@ struct YamlTypedResult size=392 align=8
   field index_allocations type=u64 offset=72
   field parser_input_capacity type=u64 offset=80
   field control_bytes type=u64 offset=88
-  field records type=ptr<void> offset=96
+  field records type=ptr<YamlRecordEntry> offset=96 count=record_count
   field record_count type=u64 offset=104
   field error_line type=u64 offset=112
   field error_column type=u64 offset=120
   field error_message_length type=u32 offset=128
   field error_message type=u8 offset=136
 end
-import plan_create symbol=td_yaml_plan_create return=i32 error=no_failure native_leaf=false@explicit_contract
-  param records type=ptr<void> nullable=false ownership=borrowed access=read
+import plan_create symbol=td_yaml_plan_create return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
+  param records type=ptr<YamlRecordPlan> nullable=false ownership=borrowed access=read
   param record_count type=u64
-  param fields type=ptr<void> nullable=true ownership=borrowed access=read
+  param fields type=ptr<YamlScalarField> nullable=true ownership=borrowed access=read
   param field_count type=u64
   param max_name_bytes type=u64
-  param options type=ptr<void> nullable=false ownership=borrowed access=read
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param options type=ptr<YamlOptionsStruct> nullable=false ownership=borrowed access=read
+  param result type=ptr<YamlPlan> nullable=false ownership=borrowed access=read_write
 end
 import plan_release symbol=td_yaml_plan_release return=void error=no_failure native_leaf=false@explicit_contract
-  param plan type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param plan type=ptr<YamlPlan> nullable=false ownership=borrowed access=read_write
 end
-import typed_decode symbol=td_yaml_typed_decode return=i32 error=no_failure native_leaf=false@explicit_contract
-  param plan type=ptr<void> nullable=false ownership=borrowed access=read
+import typed_decode symbol=td_yaml_typed_decode return=i32 enum=Status error=no_failure native_leaf=false@explicit_contract
+  param plan type=ptr<YamlPlan> nullable=false ownership=borrowed access=read
   param data type=ptr<u8> nullable=false ownership=borrowed access=read
   param length type=u64
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<YamlTypedResult> nullable=false ownership=borrowed access=read_write
 end
 import typed_release symbol=td_yaml_typed_release return=void error=no_failure native_leaf=false@explicit_contract
-  param result type=ptr<void> nullable=false ownership=borrowed access=read_write
+  param result type=ptr<YamlTypedResult> nullable=false ownership=borrowed access=read_write
 end
