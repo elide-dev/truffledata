@@ -7,14 +7,24 @@
 #include <cstddef>
 #include <memory>
 
-static_assert(TD_JSON_OK == truffledata::json::status_ok && TD_JSON_ARGUMENT == truffledata::json::status_argument
-              && TD_JSON_LIMIT == truffledata::json::status_limit && TD_JSON_ALLOCATION == truffledata::json::status_allocation
-              && TD_JSON_SYNTAX == truffledata::json::status_syntax && TD_JSON_INTERNAL == truffledata::json::status_internal
-              && TD_JSON_CONTRACT == truffledata::json::status_contract
-              && TD_JSON_TEXT_TOO_SMALL == truffledata::json::status_text_too_small
-              && TD_JSON_STREAM_EMPTY == truffledata::json::status_stream_empty
-              && TD_JSON_STREAM_TRUNCATED == truffledata::json::status_stream_truncated,
-              "api.h and status.h agree");
+// The tape layer (tape/native) is shared with YAML and keeps its own C++ names for these values;
+// each must equal the json.seam declaration the C ABI publishes it as.
+namespace tape = truffledata::tape;
+static_assert(TD_TAPE_VIEW_VERSION == TRUFFLEDATA_JSON_TAPE_VIEW_VERSION
+              && TD_TAPE_NONFINITE == TRUFFLEDATA_JSON_TAPE_FLAGS_NONFINITE
+              && TD_TAPE_HAS_META == TRUFFLEDATA_JSON_TAPE_FLAGS_HAS_META
+              && TD_TAPE_NO_DIRECTORIES == TRUFFLEDATA_JSON_TAPE_FLAGS_NO_DIRECTORIES
+              && TD_TAPE_YAML == TRUFFLEDATA_JSON_TAPE_FLAGS_YAML,
+              "tape/native/ctape.h and json.seam TapeView agree");
+static_assert(uint32_t(tape::scalar_kind::boolean) == TRUFFLEDATA_JSON_FIELD_KIND_BOOLEAN
+              && uint32_t(tape::scalar_kind::int64) == TRUFFLEDATA_JSON_FIELD_KIND_INT64
+              && uint32_t(tape::scalar_kind::uint64) == TRUFFLEDATA_JSON_FIELD_KIND_UINT64
+              && uint32_t(tape::scalar_kind::float64) == TRUFFLEDATA_JSON_FIELD_KIND_FLOAT64
+              && uint32_t(tape::scalar_kind::string) == TRUFFLEDATA_JSON_FIELD_KIND_STRING
+              && uint32_t(tape::scalar_kind::record) == TRUFFLEDATA_JSON_FIELD_KIND_RECORD
+              && tape::max_plan_depth == TRUFFLEDATA_JSON_MAX_PLAN_DEPTH
+              && tape::no_child == TRUFFLEDATA_JSON_NO_CHILD,
+              "tape/native/typed_plan.h and json.seam FieldKind/MAX_PLAN_DEPTH/NO_CHILD agree");
 static_assert(sizeof(TapeView) == sizeof(td_tape_view) && offsetof(TapeView, words) == offsetof(td_tape_view, words)
               && offsetof(TapeView, pool) == offsetof(td_tape_view, pool)
               && offsetof(TapeView, input) == offsetof(td_tape_view, input)
@@ -59,12 +69,12 @@ extern "C" uint8_t* td_json_fingerprint() {
 
 extern "C" int32_t td_json_decode(const uint8_t* data, uint64_t length,
     uint64_t max_input_bytes, uint64_t max_index_bytes, uint64_t max_nodes,
-    uint64_t max_text_bytes, uint32_t max_depth, void* output) {
+    uint64_t max_text_bytes, uint32_t max_depth, JsonResult* output) {
   if (!aligned(output)) return TD_JSON_ARGUMENT;
-  auto& result = *static_cast<JsonResult*>(output);
+  auto& result = *output;
   if (result.owner || result.view) return TD_JSON_ARGUMENT;
   result = {};
-  if (!data || max_depth > 128) return TD_JSON_ARGUMENT;
+  if (!data || max_depth > TD_JSON_MAX_DEPTH) return TD_JSON_ARGUMENT;
   if (length > max_input_bytes || length > UINT32_MAX) return TD_JSON_LIMIT;
   try {
     return publish(std::make_unique<handle>(
@@ -76,12 +86,12 @@ extern "C" int32_t td_json_decode(const uint8_t* data, uint64_t length,
 
 extern "C" int32_t td_json_decode_adopted(const uint8_t* data, uint64_t length,
     uint64_t capacity, uint64_t max_input_bytes, uint64_t max_index_bytes,
-    uint64_t max_nodes, uint64_t max_text_bytes, uint32_t max_depth, void* output) {
+    uint64_t max_nodes, uint64_t max_text_bytes, uint32_t max_depth, JsonResult* output) {
   if (!aligned(output)) return TD_JSON_ARGUMENT;
-  auto& result = *static_cast<JsonResult*>(output);
+  auto& result = *output;
   if (result.owner || result.view) return TD_JSON_ARGUMENT;
   result = {};
-  if (!data || max_depth > 128 || capacity < length) return TD_JSON_ARGUMENT;
+  if (!data || max_depth > TD_JSON_MAX_DEPTH || capacity < length) return TD_JSON_ARGUMENT;
   if (length > max_input_bytes || length > UINT32_MAX) return TD_JSON_LIMIT;
   try {
     return publish(std::make_unique<handle>(
@@ -91,38 +101,38 @@ extern "C" int32_t td_json_decode_adopted(const uint8_t* data, uint64_t length,
   } catch (...) { return translate(); }
 }
 
-extern "C" void td_json_release(void* output) {
+extern "C" void td_json_release(JsonResult* output) {
   if (!aligned(output)) return;
-  auto& result = *static_cast<JsonResult*>(output);
+  auto& result = *output;
   auto* owned = static_cast<truffledata::json::result_owner*>(result.owner);
   result = {};
   if (owned) owned->destroy();
 }
 
-extern "C" int32_t td_json_plan_create(const void* records, uint64_t record_count,
-    const void* fields, uint64_t field_count, uint64_t max_name_bytes, void* output) {
+extern "C" int32_t td_json_plan_create(const JsonRecordPlan* records, uint64_t record_count,
+    const JsonScalarField* fields, uint64_t field_count, uint64_t max_name_bytes, JsonPlan* output) {
   if (!aligned(output)) return TD_JSON_ARGUMENT;
-  auto& result = *static_cast<JsonPlan*>(output);
+  auto& result = *output;
   if (result.owner) return TD_JSON_ARGUMENT;
   if (!record_count || !records
       || reinterpret_cast<uintptr_t>(records) % alignof(JsonRecordPlan))
     return TD_JSON_ARGUMENT;
-  if (record_count > TD_JSON_MAX_PLAN_RECORDS || field_count > 64 * record_count)
+  if (record_count > TD_JSON_MAX_PLAN_RECORDS || field_count > uint64_t(TRUFFLEDATA_JSON_MAX_RECORD_FIELDS) * record_count)
     return TD_JSON_LIMIT;
   if (field_count && !aligned(fields)) return TD_JSON_ARGUMENT;
-  const auto* layout = static_cast<const JsonRecordPlan*>(records);
+  const auto* layout = records;
   uint64_t next = 0;
   // Records partition the field table in order: record i owns
   // fields [fields_offset, fields_offset + field_count).
   for (uint64_t r = 0; r < record_count; ++r) {
-    if (layout[r].field_count > 64) return TD_JSON_LIMIT;
+    if (layout[r].field_count > TRUFFLEDATA_JSON_MAX_RECORD_FIELDS) return TD_JSON_LIMIT;
     if (layout[r].fields_offset != next || layout[r].field_count > field_count - next)
       return TD_JSON_ARGUMENT;
     next += layout[r].field_count;
   }
   if (next != field_count) return TD_JSON_ARGUMENT;
   try {
-    const auto* source = static_cast<const JsonScalarField*>(fields);
+    const auto* source = fields;
     std::vector<std::vector<truffledata::json::scalar_field>> schema(record_count);
     uint64_t names = 0;
     for (uint64_t r = 0; r < record_count; ++r) {
@@ -130,7 +140,7 @@ extern "C" int32_t td_json_plan_create(const void* records, uint64_t record_coun
       record.reserve(layout[r].field_count);
       for (uint64_t i = layout[r].fields_offset; i < layout[r].fields_offset + layout[r].field_count; ++i) {
         const auto& field = source[i];
-        if (field.kind > 5 || (field.flags & ~7u) || (!field.name && field.name_length))
+        if (field.kind > TRUFFLEDATA_JSON_FIELD_KIND_RECORD || (field.flags & ~TRUFFLEDATA_JSON_FIELD_FLAGS_ALL) || (!field.name && field.name_length))
           return TD_JSON_ARGUMENT;
         if (field.name_length > UINT32_MAX || field.name_length > max_name_bytes - names)
           return TD_JSON_LIMIT;
@@ -138,9 +148,10 @@ extern "C" int32_t td_json_plan_create(const void* records, uint64_t record_coun
         std::string name;
         if (field.name_length) name.assign(reinterpret_cast<const char*>(field.name), field.name_length);
         record.push_back({std::move(name), static_cast<truffledata::json::scalar_kind>(field.kind),
-            bool(field.flags & 1), bool(field.flags & 2), field.minimum, field.maximum,
+            bool(field.flags & TRUFFLEDATA_JSON_FIELD_FLAGS_REQUIRED),
+            bool(field.flags & TRUFFLEDATA_JSON_FIELD_FLAGS_NULLABLE), field.minimum, field.maximum,
             field.unsigned_maximum, size_t(field.max_utf8_bytes), field.float_bits, field.length_unit,
-            field.minimum_length, field.maximum_length, bool(field.flags & 4), field.child});
+            field.minimum_length, field.maximum_length, bool(field.flags & TRUFFLEDATA_JSON_FIELD_FLAGS_REPEATED), field.child});
       }
     }
     auto owned = std::make_unique<truffledata::json::typed_plan>(std::move(schema));
@@ -152,22 +163,22 @@ extern "C" int32_t td_json_plan_create(const void* records, uint64_t record_coun
     catch (...) { return TD_JSON_INTERNAL; }
 }
 
-extern "C" void td_json_plan_release(void* output) {
+extern "C" void td_json_plan_release(JsonPlan* output) {
   if (!aligned(output)) return;
-  auto& result = *static_cast<JsonPlan*>(output);
+  auto& result = *output;
   auto* owned = static_cast<truffledata::json::typed_plan*>(result.owner);
   result = {};
   delete owned;
 }
 
-extern "C" int32_t td_json_typed_decode(const void* plan_record, const uint8_t* data,
-    uint64_t length, uint64_t max_input_bytes, uint64_t max_index_bytes, void* output) {
+extern "C" int32_t td_json_typed_decode(const JsonPlan* plan_record, const uint8_t* data,
+    uint64_t length, uint64_t max_input_bytes, uint64_t max_index_bytes, JsonTypedResult* output) {
   if (!aligned(output)) return TD_JSON_ARGUMENT;
-  auto& result = *static_cast<JsonTypedResult*>(output);
+  auto& result = *output;
   if (result.owner || result.slots) return TD_JSON_ARGUMENT;
   result = {};
   if (!aligned(plan_record) || !data) return TD_JSON_ARGUMENT;
-  auto* plan = static_cast<const truffledata::json::typed_plan*>(static_cast<const JsonPlan*>(plan_record)->owner);
+  auto* plan = static_cast<const truffledata::json::typed_plan*>(plan_record->owner);
   if (!plan) return TD_JSON_ARGUMENT;
   if (length > UINT32_MAX || length > max_input_bytes) return TD_JSON_LIMIT;
   try {
@@ -196,9 +207,9 @@ extern "C" int32_t td_json_typed_decode(const void* plan_record, const uint8_t* 
     catch (...) { return TD_JSON_INTERNAL; }
 }
 
-extern "C" void td_json_typed_release(void* output) {
+extern "C" void td_json_typed_release(JsonTypedResult* output) {
   if (!aligned(output)) return;
-  auto& result = *static_cast<JsonTypedResult*>(output);
+  auto& result = *output;
   auto* owned = static_cast<truffledata::json::typed_document*>(result.owner);
   result = {};
   delete owned;
@@ -209,6 +220,14 @@ extern "C" void td_json_typed_release(void* output) {
 namespace {
 // Not `session`: the macOS SDK declares a global `struct session`.
 using json_session = truffledata::json::session;
+// json.seam's opaque JsonSession and JsonStream are these C++ objects; the C ABI carries only the
+// pointer, so the handles convert by reinterpret_cast, never by dereferencing the opaque types.
+JsonSession* session_handle(json_session* s) { return reinterpret_cast<JsonSession*>(s); }
+json_session* session_of(JsonSession* handle) { return reinterpret_cast<json_session*>(handle); }
+JsonStream* stream_handle(truffledata::json::stream* s) { return reinterpret_cast<JsonStream*>(s); }
+truffledata::json::stream* stream_of(JsonStream* handle) {
+  return reinterpret_cast<truffledata::json::stream*>(handle);
+}
 // The 4 KiB bound of the leaf decode: at the probe's ≈ 150 MB/s worst case this is ≈ 30 µs.
 constexpr uint64_t critical_limit = TD_JSON_CRITICAL_LIMIT;
 
@@ -257,39 +276,39 @@ int32_t session_decode(json_session& s, const uint8_t* data, uint64_t length, ui
 }
 }
 
-extern "C" void* td_json_session_create(const void* limits) {
+extern "C" JsonSession* td_json_session_create(const JsonLimitsStruct* limits) {
   if (!aligned(limits)) return nullptr;
-  const auto& l = *static_cast<const JsonLimitsStruct*>(limits);
-  if (l.max_depth > 128 || l.max_input_bytes == 0 || l.flags) return nullptr;
+  const auto& l = *limits;
+  if (l.max_depth > TD_JSON_MAX_DEPTH || l.max_input_bytes == 0 || l.flags) return nullptr;
   try {
-    return new json_session(myna::value_limits{l.max_nodes, l.max_text_bytes, l.max_depth},
-        truffledata::tape::storage_limits{size_t(l.max_input_bytes), size_t(l.max_index_bytes)});
+    return session_handle(new json_session(myna::value_limits{l.max_nodes, l.max_text_bytes, l.max_depth},
+        truffledata::tape::storage_limits{size_t(l.max_input_bytes), size_t(l.max_index_bytes)}));
   } catch (...) { return nullptr; }
 }
 
-extern "C" int32_t td_json_session_decode(void* handle, const uint8_t* data, uint64_t length,
+extern "C" int32_t td_json_session_decode(JsonSession* handle, const uint8_t* data, uint64_t length,
     uint32_t flags, uint8_t* text_out, uint64_t text_capacity, void* output) {
   if (!handle || !aligned(output)) return TD_JSON_ARGUMENT;
-  return session_decode(*static_cast<json_session*>(handle), data, length, flags, text_out,
+  return session_decode(*session_of(handle), data, length, flags, text_out,
                         text_capacity, *static_cast<JsonResult*>(output));
 }
 
-extern "C" int32_t td_json_session_decode_small(void* handle, const uint8_t* data, uint64_t length,
+extern "C" int32_t td_json_session_decode_small(JsonSession* handle, const uint8_t* data, uint64_t length,
     uint32_t flags, uint8_t* text_out, uint64_t text_capacity, void* output) {
   if (!handle || !aligned(output)) return TD_JSON_ARGUMENT;
   if (length > critical_limit) {
     *static_cast<JsonResult*>(output) = {};
     return TD_JSON_ARGUMENT;
   }
-  return session_decode(*static_cast<json_session*>(handle), data, length, flags, text_out,
+  return session_decode(*session_of(handle), data, length, flags, text_out,
                         text_capacity, *static_cast<JsonResult*>(output));
 }
 
-extern "C" int32_t td_json_session_retain(void* handle, void* output) {
+extern "C" int32_t td_json_session_retain(JsonSession* handle, JsonResult* output) {
   if (!handle || !aligned(output)) return TD_JSON_ARGUMENT;
-  auto& result = *static_cast<JsonResult*>(output);
+  auto& result = *output;
   if (result.owner || result.view) return TD_JSON_ARGUMENT;
-  auto& s = *static_cast<json_session*>(handle);
+  auto& s = *session_of(handle);
   if (!s.live()) return TD_JSON_ARGUMENT;
   // Read before retain: the session forgets the document once its storage moves.
   size_t input = s.input_length();
@@ -302,38 +321,38 @@ extern "C" int32_t td_json_session_retain(void* handle, void* output) {
   } catch (...) { return translate(); }
 }
 
-extern "C" void td_json_session_reset(void* handle) {
-  if (handle) static_cast<json_session*>(handle)->reset();
+extern "C" void td_json_session_reset(JsonSession* handle) {
+  if (handle) session_of(handle)->reset();
 }
 
-extern "C" void td_json_session_release(void* handle) {
-  delete static_cast<json_session*>(handle);
+extern "C" void td_json_session_release(JsonSession* handle) {
+  delete session_of(handle);
 }
 
 // ---- Streams (plan Task F1) -----------------------------------------------------------------
 
-extern "C" void* td_json_stream_create(void* handle, uint64_t max_document_bytes, uint64_t batch_bytes) {
+extern "C" JsonStream* td_json_stream_create(JsonSession* handle, uint64_t max_document_bytes, uint64_t batch_bytes) {
   if (!handle) return nullptr;
   try {
-    return new truffledata::json::stream(*static_cast<json_session*>(handle), size_t(max_document_bytes),
-                                         size_t(batch_bytes));
+    return stream_handle(new truffledata::json::stream(*session_of(handle), size_t(max_document_bytes),
+                                                       size_t(batch_bytes)));
   } catch (...) { return nullptr; }
 }
 
-extern "C" uint64_t td_json_stream_feed(void* handle, const uint8_t* data, uint64_t length) {
+extern "C" uint64_t td_json_stream_feed(JsonStream* handle, const uint8_t* data, uint64_t length) {
   if (!handle) return 0;
-  return static_cast<truffledata::json::stream*>(handle)->feed(data, size_t(length));
+  return stream_of(handle)->feed(data, size_t(length));
 }
 
-extern "C" void td_json_stream_finish(void* handle) {
-  if (handle) static_cast<truffledata::json::stream*>(handle)->finish();
+extern "C" void td_json_stream_finish(JsonStream* handle) {
+  if (handle) stream_of(handle)->finish();
 }
 
-extern "C" int32_t td_json_stream_next(void* handle, uint32_t flags, void* output) {
+extern "C" int32_t td_json_stream_next(JsonStream* handle, uint32_t flags, void* output) {
   if (!handle || !aligned(output)) return TD_JSON_ARGUMENT;
   auto& result = *static_cast<JsonResult*>(output);
   result = {};
-  auto& s = *static_cast<truffledata::json::stream*>(handle);
+  auto& s = *stream_of(handle);
   json_session::document_view d{};
   if (flags & ~TD_JSON_WANT_DIRECTORIES) return TD_JSON_ARGUMENT;
   int32_t status = s.next(d, (flags & TD_JSON_WANT_DIRECTORIES) != 0);
@@ -341,17 +360,17 @@ extern "C" int32_t td_json_stream_next(void* handle, uint32_t flags, void* outpu
   return status;
 }
 
-extern "C" int32_t td_json_stream_skip(void* handle) {
+extern "C" int32_t td_json_stream_skip(JsonStream* handle) {
   if (!handle) return TD_JSON_ARGUMENT;
-  return static_cast<truffledata::json::stream*>(handle)->skip();
+  return stream_of(handle)->skip();
 }
 
-extern "C" uint64_t td_json_stream_truncated_bytes(void* handle) {
-  return handle ? static_cast<truffledata::json::stream*>(handle)->pending() : 0;
+extern "C" uint64_t td_json_stream_truncated_bytes(JsonStream* handle) {
+  return handle ? stream_of(handle)->pending() : 0;
 }
 
-extern "C" void td_json_stream_release(void* handle) {
-  delete static_cast<truffledata::json::stream*>(handle);
+extern "C" void td_json_stream_release(JsonStream* handle) {
+  delete stream_of(handle);
 }
 
 // ---- Myna interchange (tape-gbps plan Task 2, §5) ---------------------------------------------
@@ -366,12 +385,12 @@ struct myna_conversion final : truffledata::json::result_owner {
 };
 }
 
-extern "C" int32_t td_json_result_myna(const void* source, void* output) {
+extern "C" int32_t td_json_result_myna(const JsonResult* source, JsonResult* output) {
   if (!aligned(source) || !aligned(output)) return TD_JSON_ARGUMENT;
-  auto& result = *static_cast<JsonResult*>(output);
+  auto& result = *output;
   if (result.owner || result.view) return TD_JSON_ARGUMENT;
   result = {};
-  const auto& from = *static_cast<const JsonResult*>(source);
+  const auto& from = *source;
   // Only a compact descriptor converts (a Myna descriptor's version is 3 or 4).
   const auto* tape = static_cast<const td_tape_view*>(from.view);
   if (!tape || tape->version != TD_TAPE_VIEW_VERSION) return TD_JSON_ARGUMENT;
