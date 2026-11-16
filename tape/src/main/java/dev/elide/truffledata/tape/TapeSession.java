@@ -165,13 +165,14 @@ public abstract class TapeSession<M extends TapeOwner> implements AutoCloseable 
   private void endStreamed(Backend<M> open) {
     TapeBorrow lent = streamed;
     if (lent == null) return;
+    // A pinned export refuses the end: leave the borrow tracked and the session untouched so
+    // the walk keeps reading live storage and the next call retries the end. Clearing the
+    // streamed state or resetting before lent.end() returns would discard the borrow on a
+    // refusal, defeating the pin guard (and a later close would release under the walk).
+    lent.end();
     streamed = null;
     streamedBy = null;
-    try {
-      lent.end();
-    } finally {
-      open.reset();
-    }
+    open.reset();
   }
 
   /** Decodes into the session; the borrowed result is valid until the next session call. */
@@ -410,8 +411,11 @@ public abstract class TapeSession<M extends TapeOwner> implements AutoCloseable 
     if (borrow != null) throw new IllegalStateException(format + " session is borrowed");
     Backend<M> open = backend;
     if (open != null) {
+      // End any document a stream lent first: its pin guard refuses (throws) when a walk holds
+      // it open, and that throw must abort close() before the release below. Releasing the
+      // native session beneath an active export would free the storage the walk is reading.
+      endStreamed(open);
       try {
-        endStreamed(open);
         // Streams borrow the native session: close them first (their views fail from now on).
         for (TapeStream<M> stream : List.copyOf(streams)) stream.close();
       } finally {
