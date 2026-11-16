@@ -286,6 +286,81 @@ class ProjectionTest {
   }
 
   @Test
+  void laxMergeOfRepeatedSingularChildSkipsOmittedUtf8() {
+    var plan = LayoutTest.merge();
+    var lax =
+        Projection.builder(plan)
+            .selectType("Outer", "inner")
+            .selectType("Inner", "a", "r")
+            .build()
+            .lax();
+    var strict =
+        Projection.builder(plan).selectType("Outer", "inner").selectType("Inner", "a", "r").build();
+    byte[] invalid = new byte[] {(byte) 0x80};
+    byte[] one =
+        LayoutTest.wire().message(1, LayoutTest.wire().field(1, 1).bytes(3, invalid)).bytes();
+    byte[] two =
+        LayoutTest.wire()
+            .message(1, LayoutTest.wire().field(1, 1).bytes(3, invalid))
+            .message(1, LayoutTest.wire().field(1, 2).bytes(3, invalid))
+            .bytes();
+    assertDoesNotThrow(() -> decode(plan, one, lax));
+    assertDoesNotThrow(() -> decode(plan, two, lax));
+    assertThrows(ContractViolation.class, () -> decode(plan, one, strict));
+    assertThrows(ContractViolation.class, () -> decode(plan, two, strict));
+    byte[] valid =
+        LayoutTest.wire()
+            .message(1, LayoutTest.wire().field(1, 1).field(2, 1).string(3, "x"))
+            .message(1, LayoutTest.wire().field(1, 2).field(2, 2).string(3, "yy"))
+            .bytes();
+    var message = decode(plan, valid, lax);
+    var inner = (SlabRow) message.get(0);
+    assertEquals(2L, inner.getLong(0));
+    assertEquals(2, inner.getSize(1));
+    assertThrows(ContractViolation.class, () -> inner.get(2));
+  }
+
+  @Test
+  void laxMergeOfRepeatedOneofMessageMemberSkipsOmittedUtf8() {
+    var oneof =
+        LayoutTest.model(
+                LayoutTest.type(
+                    "Choice",
+                    LayoutTest.member("m", 1, MESSAGE, "Value", 0),
+                    LayoutTest.member("n", 2, INT32, "", 0)),
+                LayoutTest.type(
+                    "Value",
+                    LayoutTest.scalar("a", 1, INT32, false),
+                    LayoutTest.scalar("s", 2, STRING, false)))
+            .type("Choice");
+    var lax =
+        Projection.builder(oneof).selectType("Choice", "m").selectType("Value", "a").build().lax();
+    var strict =
+        Projection.builder(oneof).selectType("Choice", "m").selectType("Value", "a").build();
+    byte[] invalid = new byte[] {(byte) 0x80};
+    byte[] one =
+        LayoutTest.wire().message(1, LayoutTest.wire().field(1, 1).bytes(2, invalid)).bytes();
+    byte[] two =
+        LayoutTest.wire()
+            .message(1, LayoutTest.wire().field(1, 1).bytes(2, invalid))
+            .message(1, LayoutTest.wire().field(1, 2).bytes(2, invalid))
+            .bytes();
+    assertDoesNotThrow(() -> decode(oneof, one, lax));
+    assertDoesNotThrow(() -> decode(oneof, two, lax));
+    assertThrows(ContractViolation.class, () -> decode(oneof, one, strict));
+    assertThrows(ContractViolation.class, () -> decode(oneof, two, strict));
+    byte[] valid =
+        LayoutTest.wire()
+            .message(1, LayoutTest.wire().field(1, 1).string(2, "x"))
+            .message(1, LayoutTest.wire().field(1, 2).string(2, "yy"))
+            .bytes();
+    var message = decode(oneof, valid, lax);
+    var value = (SlabRow) message.get(0);
+    assertEquals(2L, value.getLong(0));
+    assertThrows(ContractViolation.class, () -> value.get(1));
+  }
+
+  @Test
   void internalProjectionEnforcesRequiredFieldsAndLogicalBudgets() {
     var root =
         LayoutTest.type(

@@ -16,6 +16,7 @@ public final class Schema {
 
   private final DataArray names;
   private final Map<String, Integer> ordinals;
+  private final boolean uniqueNames;
   private final @org.jspecify.annotations.Nullable String typeName;
 
   // Accessor tables, filled on first request (slow path only): the library-backed defaults, and
@@ -37,6 +38,8 @@ public final class Schema {
       index.merge(name, i, (previous, next) -> -1);
     }
     this.ordinals = index;
+    // Duplicate labels merge into one key.
+    this.uniqueNames = index.size() == this.fields.length;
   }
 
   public static Schema of(Field... fields) {
@@ -100,6 +103,11 @@ public final class Schema {
       table[ordinal] = accessor;
     }
     return accessor;
+  }
+
+  /** Whether every field has its own label (no two ordinals share a name). */
+  public boolean uniqueNames() {
+    return uniqueNames;
   }
 
   /** Duplicate labels remain available by ordinal; named access must be unambiguous. */

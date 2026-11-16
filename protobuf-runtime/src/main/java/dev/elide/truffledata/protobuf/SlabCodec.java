@@ -409,9 +409,11 @@ public final class SlabCodec {
         } else {
           // A later occurrence is validated by a full decode walk that writes nothing to this
           // slab (same errors as decoding it), and kept for the merged decode at close.
-          Open walked =
-              new SlabCodec(layout, new SlabLimits(maxDepth, maxBytes), lookup)
-                  .record(child, r, childEnd, isGroup ? number : 0, depth + 1);
+          var validator = new SlabCodec(layout, new SlabLimits(maxDepth, maxBytes), lookup);
+          validator.projection = projection;
+          validator.input = r.in;
+          validator.inputOffset = inputOffset;
+          Open walked = validator.record(child, r, childEnd, isGroup ? number : 0, depth + 1, full);
           payload = new Payload(r.in, bodyStart, isGroup ? walked.bodyEnd : childEnd);
         }
         Objects.requireNonNull(merges(open).get(ordinal)).add(payload);
