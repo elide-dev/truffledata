@@ -26,12 +26,15 @@ final class JvmTypedOwner extends TypedOwner {
   private final MemorySegment records;
   private final Runnable release;
 
-  /** Takes {@code result}; {@code release} frees it and runs once, from {@link #close()}. */
+  /**
+   * Takes {@code result}; {@code release} frees it and runs once, from {@link #close()}. The slot
+   * arena and record table are json.seam counted views, taken once through the generated accessors
+   * after the checks below, which keep this owner's own failure for a missing or oversized table.
+   */
   JvmTypedOwner(MemorySegment result, Schema[] schemas, Runnable release) {
     super(schemas);
-    long slotCount = result.get(ValueLayout.JAVA_LONG, JsonFFM.JsonTypedResult_count_OFFSET);
-    long recordCount =
-        result.get(ValueLayout.JAVA_LONG, JsonFFM.JsonTypedResult_record_count_OFFSET);
+    long slotCount = JsonFFM.JsonTypedResult_slots_count(result);
+    long recordCount = JsonFFM.JsonTypedResult_records_count(result);
     MemorySegment slotTable = result.get(ValueLayout.ADDRESS, JsonFFM.JsonTypedResult_slots_OFFSET);
     MemorySegment recordTable =
         result.get(ValueLayout.ADDRESS, JsonFFM.JsonTypedResult_records_OFFSET);
@@ -42,8 +45,8 @@ final class JvmTypedOwner extends TypedOwner {
         || slotCount > Long.MAX_VALUE / SLOT_SIZE
         || recordCount > Long.MAX_VALUE / ENTRY_SIZE)
       throw new IllegalStateException("JSON typed result tables missing");
-    this.slots = slotTable.reinterpret(slotCount * SLOT_SIZE);
-    this.records = recordTable.reinterpret(recordCount * ENTRY_SIZE);
+    this.slots = JsonFFM.JsonTypedResult_slots(result);
+    this.records = JsonFFM.JsonTypedResult_records(result);
     this.release = release;
   }
 
@@ -78,16 +81,17 @@ final class JvmTypedOwner extends TypedOwner {
 
   @Override
   protected String text(long slot) {
-    return copyText(slots, slot * SLOT_SIZE);
+    return copyText(slots, slot);
   }
 
   @TruffleBoundary
-  private static String copyText(MemorySegment slots, long offset) {
-    long length = slots.get(ValueLayout.JAVA_LONG, offset + JsonFFM.JsonScalarSlot_text_length_OFFSET);
+  private static String copyText(MemorySegment slots, long index) {
+    MemorySegment slot = JsonFFM.JsonTypedResult_slots_at(slots, index);
+    long length = JsonFFM.JsonScalarSlot_text_count(slot);
     if (length < 0 || length > Integer.MAX_VALUE - 8)
       throw new IllegalStateException("JSON typed text length");
-    MemorySegment text =
-        slots.get(ValueLayout.ADDRESS, offset + JsonFFM.JsonScalarSlot_text_OFFSET).reinterpret(length);
+    // The counted view JsonScalarSlot.text/text_length.
+    MemorySegment text = JsonFFM.JsonScalarSlot_text(slot);
     return new String(text.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8);
   }
 

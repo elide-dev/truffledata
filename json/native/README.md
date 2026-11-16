@@ -187,8 +187,10 @@ buffer or Java string.
 
 ## Nested and repeated typed plans
 
-A `typed_plan` is a table of closed records (record 0 is the root). A field of
-kind 5 (`record`) links to another record by `JsonScalarField.child`; flag bit 2
+A `typed_plan` is a table of closed records (record 0 is the root). The field
+code tables are `json.seam` enums and flag sets (`FieldKind`, `FieldFlags`,
+`LengthUnit`, `FloatWidth`), generated into `seam.h` and `JsonConstants`. A field of
+kind `record` links to another record by `JsonScalarField.child`; the `repeated` flag
 marks a repeated field, decoded from a JSON array whose elements each satisfy the
 field's scalar contract (elements are never null; `nullable` applies to the array
 itself). Plans that are recursive or nest deeper than 32 records are rejected at
