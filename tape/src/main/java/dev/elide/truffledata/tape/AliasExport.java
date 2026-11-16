@@ -68,6 +68,13 @@ final class AliasExport {
       if ((bits & EXPANDED) != 0 && ++expanded > format.maxAliasExpansion)
         throw new IllegalArgumentException("YAML alias expansion limit");
       if ((bits & KEY) != 0) {
+        int word = meta[Math.toIntExact(node)];
+        if ((word & TapeFormat.ALIAS) == 0) {
+          int tag = word >>> TapeFormat.ORDINAL_SHIFT;
+          if (tag != 0) emitTag(stack, format, tag - 1, sink);
+          int anchor = format.anchorId(node);
+          if (anchor >= 0) { sink.anchor(anchor); stack.seen[anchor] = stack.generation; }
+        }
         text.bind(node);
         try { sink.key(text); } finally { text.unbind(); }
         stack.flags[top] = bits & ~KEY;
