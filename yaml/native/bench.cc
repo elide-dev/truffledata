@@ -184,8 +184,8 @@ uint64_t libyaml_scan(const std::string& src) {
 }
 
 // Every document of `src` through the stream API (documents(byte[])); returns the node count.
-uint64_t stream_documents(void* session, const std::string& src) {
-  void* st = td_yaml_stream_create(session, uint64_t(64) << 20, uint64_t(64) << 20);
+uint64_t stream_documents(YamlSession* session, const std::string& src) {
+  YamlStream* st = td_yaml_stream_create(session, uint64_t(64) << 20, uint64_t(64) << 20);
   if (!st) std::abort();
   if (td_yaml_stream_feed(st, reinterpret_cast<const uint8_t*>(src.data()), src.size()) != src.size()) std::abort();
   td_yaml_stream_finish(st);
@@ -251,7 +251,7 @@ int main(int argc, char** argv) {
   }
   if (profile_seconds > 0) {
     YamlOptionsStruct po = options();
-    void* ps = td_yaml_session_create(&po);
+    YamlSession* ps = td_yaml_session_create(&po);
     for (const auto& path : files) {
       const std::string file = basename(path);
       const std::string src = slurp(path);
@@ -283,7 +283,7 @@ int main(int argc, char** argv) {
   std::map<std::string, size_t> sizes;
   std::vector<double> gates;
   YamlOptionsStruct o = options();
-  void* session = td_yaml_session_create(&o);
+  YamlSession* session = td_yaml_session_create(&o);
   if (!session) return 2;
   for (int pass = 1; pass <= passes; ++pass) {
     std::map<std::string, std::map<std::string, double>> ns_of;

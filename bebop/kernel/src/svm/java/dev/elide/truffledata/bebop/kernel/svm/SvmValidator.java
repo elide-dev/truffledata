@@ -23,6 +23,11 @@ public final class SvmValidator extends BebopValidator {
   private static boolean verified;
 
   public SvmValidator() {
+    verifyOnce();
+  }
+
+  /** Checks the linked library's ABI fingerprint once per process (the image's one library). */
+  private static void verifyOnce() {
     if (!verified) {
       // The image's ABI class (Platform.includedIn folds at image build time): one constant.
       String expected = BebopNativeAbi.fingerprint(Platform.includedIn(Platform.LINUX_AARCH64.class));

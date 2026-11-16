@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import dev.elide.truffledata.ContractViolation;
 import dev.elide.truffledata.DataArray;
 import dev.elide.truffledata.buffa.NativeTapeAcceptance;
+import dev.elide.truffledata.buffa.generated.BuffaConstants;
 import dev.elide.truffledata.buffa.generated.BuffaFFM;
 import java.lang.foreign.*;
 import java.nio.file.*;
@@ -94,7 +95,11 @@ final class SlabNativeParity {
                 /* paired native rejection below */
               }
               int flags =
-                  (projection.requiresBorrow() ? 8 : 1) | (projection.laxValidation() ? 2 : 0);
+                  (projection.requiresBorrow()
+                          ? BuffaConstants.DecodeFlags.BORROWING
+                          : BuffaConstants.DecodeFlags.OWNING)
+                      | (projection.laxValidation() ? BuffaConstants.DecodeFlags.LAX : 0);
+              assertEquals(flags, projection.decodeFlags());
               int status =
                   (int)
                       decode.invokeExact(
@@ -185,7 +190,7 @@ final class SlabNativeParity {
                         compiled,
                         input,
                         (long) wire.length,
-                        1,
+                        BuffaConstants.DecodeFlags.OWNING,
                         MemorySegment.NULL,
                         output,
                         1L << 20,
@@ -228,10 +233,35 @@ final class SlabNativeParity {
     }
   }
 
+  /**
+   * protobuf-runtime is pure Java, so it keeps its own copy of the slab header flags ({@link
+   * SlabFormat}), of the decode flags a projection requests ({@link Projection#decodeFlags}) and of
+   * the critical-size and depth bounds ({@link SlabLimits}); buffa.seam is the native producer's
+   * source of truth. They must agree.
+   */
+  @Test
+  void javaSlabFormatMatchesTheSeam() {
+    assertEquals(BuffaConstants.SlabFlags.OWNING, SlabFormat.OWNING);
+    assertEquals(BuffaConstants.SlabFlags.BORROWING, SlabFormat.BORROWING);
+    assertEquals(BuffaConstants.SlabFlags.LAX, SlabFormat.LAX);
+    assertEquals(BuffaConstants.SlabFlags.CERTIFIED, SlabFormat.CERTIFIED);
+    assertEquals(BuffaConstants.SlabFlags.PROJECTED, SlabFormat.PROJECTED);
+    assertEquals(BuffaConstants.SMALL_LIMIT, SlabLimits.CRITICAL_BYTES);
+    new SlabLimits(BuffaConstants.MAX_DEPTH, 1 << 20);
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new SlabLimits(BuffaConstants.MAX_DEPTH + 1, 1 << 20));
+    var all = Projection.all(LayoutTest.choice());
+    assertEquals(BuffaConstants.DecodeFlags.OWNING, all.decodeFlags());
+    assertEquals(
+        BuffaConstants.DecodeFlags.OWNING | BuffaConstants.DecodeFlags.LAX,
+        all.lax().decodeFlags());
+  }
+
   // ---- WS2: trusted in-process publication (seam ABI 12 logical totals) ----
 
   private static final SlabLimits LIMITS = new SlabLimits(32, 1 << 20);
-  private static final int CERTIFIED = SlabFormat.CERTIFIED;
+  private static final int CERTIFIED = BuffaConstants.SlabFlags.CERTIFIED;
   private static final int UNKNOWN_TOTAL = -1;
 
   /** The native producer's report for one decode: header flags and logical totals. */
@@ -256,7 +286,7 @@ final class SlabNativeParity {
                 compiled,
                 input,
                 (long) wire.length,
-                1,
+                BuffaConstants.DecodeFlags.OWNING,
                 MemorySegment.NULL,
                 output,
                 1L << 20,

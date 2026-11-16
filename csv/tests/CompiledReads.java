@@ -56,9 +56,9 @@ final class CompiledReads {
     var text = new StringBuilder("id,price,active\n");
     for (int k = 0; k < RECORDS; k++) {
       boolean active = (k & 1) == 0;
-      text.append(String.format("%06d", k * 1000))
+      text.append(String.format(java.util.Locale.ROOT, "%06d", k * 1000))
           .append(',')
-          .append(String.format(active ? "%07d" : "%06d", k))
+          .append(String.format(java.util.Locale.ROOT, active ? "%07d" : "%06d", k))
           .append(".5,")
           .append(active ? "true" : "false")
           .append('\n');

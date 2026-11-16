@@ -10,6 +10,8 @@ import dev.elide.truffledata.yaml.events.YamlEvents;
 import dev.elide.truffledata.yaml.events.YamlMark;
 import dev.elide.truffledata.yaml.events.YamlScalarStyle;
 import dev.elide.truffledata.yaml.events.YamlSyntaxException;
+import dev.elide.truffledata.yaml.generated.YamlConstants;
+import dev.elide.truffledata.yaml.generated.YamlConstants.Meta;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -30,10 +32,14 @@ import org.jspecify.annotations.Nullable;
  * once into the shared compact tape with the same {@code yaml_meta} words and side tables.
  */
 final class JavaDecoder implements YamlEvents {
-  // yaml_meta layout (decoder.h).
-  static final int STYLE_MASK = 7, ANCHORED = 1 << 3, ALIAS = 1 << 4, KEY_KIND_SHIFT = 5, TAG_SHIFT = 8;
-  static final int STYLE_BLOCK = 5, STYLE_FLOW = 6;
-  private static final int META_LIMIT = 1 << 24;
+  // yaml_meta layout: yaml.seam's flags Meta and enum Style (decoder.h asserts the same).
+  static final int STYLE_MASK = Meta.STYLE_MASK,
+      ANCHORED = Meta.ANCHORED,
+      ALIAS = Meta.ALIAS,
+      KEY_KIND_SHIFT = Meta.KEY_KIND_SHIFT,
+      TAG_SHIFT = Meta.TAG_SHIFT;
+  static final int STYLE_BLOCK = YamlConstants.Style.BLOCK, STYLE_FLOW = YamlConstants.Style.FLOW;
+  private static final int META_LIMIT = (Meta.TAG_MASK >>> Meta.TAG_SHIFT) + 1;
   private static final int MAX_TAG_DIRECTIVES = 4; // rapidyaml's RYML_MAX_TAG_DIRECTIVES
   private static final String TIMESTAMP = "tag:yaml.org,2002:timestamp";
 

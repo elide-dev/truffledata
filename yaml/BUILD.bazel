@@ -10,6 +10,16 @@ java_library(
     deps = ["//bazel:myna_compiler_sdk", "@maven//:org_graalvm_sdk_nativeimage", "@maven//:org_graalvm_sdk_word"],
 )
 
+# yaml.seam's status codes, flags and policy codes (YamlConstants) for the packages that do not
+# carry the bindings (//yaml, //yaml:java). Compile-time only: every use is a constant literal that
+# javac inlines, so the published jars reference no generated class and gain no dependency.
+java_library(
+    name = "constants",
+    srcs = ["//yaml/native:java_constants"],
+    neverlink = True,
+    visibility = ["//yaml:__subpackages__"],
+)
+
 data_java_library(
     name = "yaml",
     srcs = [
@@ -43,6 +53,7 @@ data_java_library(
     visibility = ["//visibility:public"],
     exports = ["//tape"],
     deps = [
+        ":constants",
         "//tape",
         "//core",
         "@myna//:values",
@@ -140,6 +151,7 @@ data_java_library(
         "//tape",
     ],
     deps = [
+        ":constants",
         ":yaml",
         "//core",
         "//tape",

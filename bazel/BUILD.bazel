@@ -8,6 +8,14 @@ java_plugin(
     deps = ["@maven//:com_uber_nullaway_nullaway"],
 )
 
+# trufflecheck's Error Prone rules (TRUFFLECHECK_OPTS in java.bzl). The policy and its class-init
+# lists are plugin data, so every javac action that runs the rules has them as inputs.
+java_plugin(
+    name = "trufflecheck",
+    data = glob(["trufflecheck/*"]),
+    deps = ["@maven//:dev_elide_trufflecheck_errorprone"],
+)
+
 TRUFFLE_PROCESSORS = [
     "com.oracle.truffle.dsl.processor.TruffleProcessor",
     "com.oracle.truffle.dsl.processor.verify.VerifyTruffleProcessor",

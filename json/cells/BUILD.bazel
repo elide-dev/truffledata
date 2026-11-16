@@ -25,14 +25,15 @@ package(default_visibility = [
 #
 # Declared (ownership.seam has the contract of each against json/native/api.cc):
 # - resources JsonSession (session_create/session_release) and JsonStream (stream_create, which
-#   holds its session open, /stream_release); in-place results JsonResult (decode_adopted/release),
-#   JsonPlan (plan_create/plan_release) and JsonTypedResult (typed_decode/typed_release), success 0;
+#   holds its session open, /stream_release); in-place results JsonResult (three constructors,
+#   decode_adopted, decode and session_retain, /release), JsonPlan (plan_create/plan_release) and
+#   JsonTypedResult (typed_decode/typed_release), success 0;
 # - call borrows on decode, typed_decode, session_decode(_small) (data, and the nullable text_out)
 #   and stream_feed; a borrow of decode_adopted's input held until its JsonResult is released.
-# Not declared: decode, session_retain and result_myna as creates. They initialize JsonResult too,
-# and a struct is one resource with one create, so `release` takes only decode_adopted's owners in
-# a guest call (decode_adopted subsumes decode for guests: with too little padding it copies).
-# The routes call `invoke`, unchanged, and reach `release` through the cells' raw binding: a
+# Not declared: result_myna as a constructor (its output is not its `result` parameter, and every
+# constructor's handle must be the same parameter), so its result is the guest's own struct.
+# The production seam types every struct and handle pointer, so ownership.seam carries ownership
+# only. The routes call `invoke`, unchanged, and reach `release` through the cells' raw binding: a
 # resource's destroy cell has no `invoke`.
 [
     cells_seam(
@@ -76,9 +77,12 @@ package(default_visibility = [
 filegroup(
     name = "generated_sources",
     srcs = [
+        "generated/jvm/JsonCellsJvmConstants.java",
         "generated/jvm/JsonCellsJvmFFM.java",
         "generated/jvm/JsonCellsJvmTruffle.java",
         "generated/svm/JsonCells.java",
+        "generated/svm/JsonCellsConstants.java",
+        "generated/svm/JsonCellsDirectives.java",
         "generated/svm/JsonCellsTruffle.java",
     ],
 )
