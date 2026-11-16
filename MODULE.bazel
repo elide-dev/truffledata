@@ -136,6 +136,9 @@ maven.install(
         "com.uber.nullaway:nullaway:0.14.2",
         "com.google.errorprone:error_prone_core:2.50.0",
         "com.google.errorprone:error_prone_type_annotations:2.37.0",
+        # Truffle/Native Image Error Prone rules (//bazel:trufflecheck); same release as the
+        # third_party/trufflecheck submodule, which carries the agent skill and profiles.
+        "dev.elide:trufflecheck-errorprone:0.1.1",
         "com.google.protobuf:protobuf-java:4.36.1",
         "com.google.protobuf:protobuf-java-util:4.36.1",
         "com.h2database:h2:2.3.232",
@@ -172,6 +175,7 @@ maven.install(
     repositories = [
         "https://repo.maven.apache.org/maven2",
         "https://maven.elide.dev/gvm-elide/" + GRAALVM,
+        "https://maven.elide.dev",
     ],
 )
 

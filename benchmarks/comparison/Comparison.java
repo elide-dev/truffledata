@@ -853,7 +853,8 @@ public final class Comparison {
         var row = Timestamp.parseFrom(wire);
         return row.getSeconds() + row.getNanos();
       } catch (com.google.protobuf.InvalidProtocolBufferException invalid) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
+        // The corpus is valid; invalid input is a fatal benchmark error, so leave without invalidating.
+        CompilerDirectives.transferToInterpreter();
         throw invalidStockInput(invalid);
       }
     }

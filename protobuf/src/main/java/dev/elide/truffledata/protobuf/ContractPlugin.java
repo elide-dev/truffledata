@@ -297,7 +297,7 @@ public final class ContractPlugin {
         case '\n' -> out.append("\\n");
         case '\r' -> out.append("\\r");
         default -> {
-          if (c < 32 || c > 126) out.append(String.format("\\u%04x", (int) c));
+          if (c < 32 || c > 126) out.append(String.format(java.util.Locale.ROOT, "\\u%04x", (int) c));
           else out.append(c);
         }
       }

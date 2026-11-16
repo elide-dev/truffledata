@@ -80,7 +80,7 @@ public final class CellsParity {
       "anchor: &key " + "k".repeat(300) + "\nitems: [{*key : v}, {*key : w}]\n",
     };
     for (int i = 0; i < inputs.length; i++)
-      corpus.put(String.format("builtin/%02d", i), inputs[i].getBytes(StandardCharsets.UTF_8));
+      corpus.put(String.format(java.util.Locale.ROOT, "builtin/%02d", i), inputs[i].getBytes(StandardCharsets.UTF_8));
     corpus.put("builtin/invalid-utf8", new byte[] {'x', ':', ' ', (byte) 0xC3, (byte) 0x28});
     return corpus;
   }

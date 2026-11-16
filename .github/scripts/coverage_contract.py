@@ -420,6 +420,11 @@ JVM_UNREACHABLE_METHODS = {
     # Synthetic tag cursors expose resolved URI text but no source token: lexical() is always0,
     # so rawText rejects before a byte accessor can run. Tag view/snapshot/lifetime hooks are tested.
     **_tape_methods('AliasExport', 'AliasExport$1::lexicalByte (J)B'),
+    # Defensive export guards, built outside the hot loop: decoders cap nesting below MAX_DEPTH and
+    # publish only known node kinds, so no decoded tape reaches either.
+    **_tape_methods('TapeExportNode',
+        'TapeExportNode::depthLimit (Ldev/elide/truffledata/tape/TapeOwner;)Ljava/lang/IllegalStateException;',
+        'TapeExportNode::unknownKind (Ldev/elide/truffledata/tape/TapeOwner;)Ljava/lang/IllegalStateException;'),
     # Native typed tables always use HotSpot's exact native segment class; these fallbacks are
     # present for other JVM implementations, matching the JSON typed owner.
     **_yaml_methods('JvmTypedOwner',

@@ -53,6 +53,9 @@ final class CellsFfmIndexer extends CsvIndexer implements AutoCloseable {
   static final int PROVIDER_CAPACITY = 1 << 16;
 
   /** The process's cells, created on first use (after {@link #bind}). */
+  // Deliberately shared (see the class comment): language-neutral cells under their own root that
+  // a call with these argument types never mutates; a HotSpot-only route.
+  @SuppressWarnings("TruffleStaticContextState")
   static final class Cells {
     static final CsvCellsJvmTruffle.index_Cell INDEX = adopt(new CsvCellsJvmTruffle.index_Cell());
     static final CsvCellsJvmTruffle.index_leaf_Cell LEAF =
