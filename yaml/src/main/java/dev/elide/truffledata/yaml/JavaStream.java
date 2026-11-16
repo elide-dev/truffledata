@@ -1,5 +1,6 @@
 package dev.elide.truffledata.yaml;
 
+import dev.elide.truffledata.yaml.generated.YamlConstants.Status;
 import java.util.Arrays;
 import org.jspecify.annotations.Nullable;
 
@@ -18,7 +19,12 @@ import org.jspecify.annotations.Nullable;
  * </ul>
  */
 final class JavaStream {
-  static final int OK = 0, LIMIT = 2, INTERNAL = 5, EMPTY = 8, TRUNCATED = 9;
+  // yaml.seam's status codes, as td_yaml_stream_next returns them.
+  static final int OK = Status.OK,
+      LIMIT = Status.LIMIT,
+      INTERNAL = Status.INTERNAL,
+      EMPTY = Status.STREAM_EMPTY,
+      TRUNCATED = Status.STREAM_TRUNCATED;
 
   /** The session's single-document decode of one chunk; throws {@link JavaFailure}. */
   interface Chunks {

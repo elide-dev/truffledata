@@ -1,6 +1,7 @@
 package dev.elide.truffledata.yaml;
 
 import dev.elide.truffledata.tape.TapeFormat;
+import dev.elide.truffledata.yaml.generated.YamlConstants.Meta;
 import org.jspecify.annotations.Nullable;
 
 /** Detached metadata for a document. Offsets identify header words in the native compact tape. */
@@ -31,19 +32,19 @@ public final class YamlMetadata {
   }
 
   public int style(int node) {
-    return words[node] & 7;
+    return (words[node] & Meta.STYLE_MASK) >>> Meta.STYLE_SHIFT;
   }
 
   public int keyKind(int node) {
-    return (words[node] >>> 5) & 7;
+    return (words[node] & Meta.KEY_KIND_MASK) >>> Meta.KEY_KIND_SHIFT;
   }
 
   public boolean isAlias(int node) {
-    return (words[node] & 16) != 0;
+    return (words[node] & Meta.ALIAS) != 0;
   }
 
   public @Nullable String tag(int node) {
-    int index = words[node] >>> 8;
+    int index = (words[node] & Meta.TAG_MASK) >>> Meta.TAG_SHIFT;
     return isAlias(node) || index == 0 ? null : tags[index - 1];
   }
 
