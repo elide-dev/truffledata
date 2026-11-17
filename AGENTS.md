@@ -161,3 +161,13 @@ publish skipped the gates they had run and kept the per-platform consumer gates.
 attempted (#28, quota resets 2026-12-01). The public artifacts were verified against the staged
 bytes. Receipts: `benchmarks/results/release-0.13.1/`. Open: reporting the rapidyaml finding
 upstream; #89; the Bebop and performance follow-ups listed under 0.13.0.
+
+# 0.14.0 release authorization (2026-11-16)
+
+Sam instructed: "myna `0.19.0` is out, and we should fix any other bugs and cut a release of
+`truffledata`". That authorizes: pinning Myna 0.19.0 (replacing the unreleased stack pin of #121),
+fixing the open bug #112, the release PR/CI/merge, signed tag `v0.14.0`, Elide Maven and GitHub
+publication, and public artifact verification. Central stays deferred under #28 until the quota
+resets (2026-12-01); do not retry it without instruction. The same evidence, safety and
+honest-reporting rules apply. No benchmark capture is taken; there is no performance claim. Never
+add `Co-Authored-By` trailers for Claude.

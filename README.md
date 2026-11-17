@@ -128,17 +128,23 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.28")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.13.1"))
+    implementation(platform("dev.elide:truffledata-bom:0.14.0"))
     implementation("dev.elide:truffledata-core")
     implementation("dev.elide:truffledata-protobuf")
     // Add JDBC integrations or protobuf-buffa as needed.
 }
 ```
 
-[Release 0.13.1](https://github.com/elide-dev/truffledata/releases/tag/v0.13.1) includes
+[Release 0.14.0](https://github.com/elide-dev/truffledata/releases/tag/v0.14.0) includes
 source/Javadoc JARs, consumer POMs, Gradle metadata, signatures, checksums, and
 Buffa, JSON, YAML and CSV native attachments. See
 [publishing and consumption](docs/PUBLISHING.md) for Maven, Bazel and native linking.
+
+Release **0.14.0** moves the bindings to Myna 0.19.0: each seam now declares its status codes, flags,
+limits and code tables once, as generated constants shared by C++, Rust and Java, with typed struct and
+handle pointers and counted views. It also adds trufflecheck's Truffle and Native Image rules to the
+build and fixes a borrowed-payload use-after-free on the JVM and six other bugs. See the
+[0.14.0 notes](docs/RELEASE_0_14_0.md).
 
 Release **0.13.1** is a fixes-only release: YAML (a rapidyaml undefined-behaviour fuzz finding, handler
 exceptions, keep-chomped scalars), CSV mapped rows, JDBC `BIT` columns and an unbalanced tape `end()`.

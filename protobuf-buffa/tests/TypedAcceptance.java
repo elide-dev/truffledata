@@ -1216,6 +1216,11 @@ final class TypedAcceptance {
   }
 
   static ProtoPlan projectedBudgetPlan() {
+    return projectedPlan(new Limits(1, 4, 4, 0));
+  }
+
+  /** {@link #projectedBudgetPlan}'s shape under the given limits. */
+  static ProtoPlan projectedPlan(Limits limits) {
     var i64 = ProtoPlan.Kind.INT64;
     var type =
         new ProtoPlan.Type(
@@ -1233,8 +1238,7 @@ final class TypedAcceptance {
                     false,
                     "ProjectedBudget",
                     Missing.INSTANCE)));
-    return new ProtoPlan.Model(null, List.of(type), new Limits(1, 4, 4, 0), 8, NATIVE)
-        .type("ProjectedBudget");
+    return new ProtoPlan.Model(null, List.of(type), limits, 8, NATIVE).type("ProjectedBudget");
   }
 
   private static void projectedRetainBudgets(BuffaWire decoder) {

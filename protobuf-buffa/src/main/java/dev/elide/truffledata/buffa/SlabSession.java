@@ -25,7 +25,10 @@ public final class SlabSession implements AutoCloseable {
   final @Nullable Projection projection;
   private final @Nullable WireInput projectionInput;
   private WireInput.@Nullable Lease source;
+  // The borrowed source: a raw address in an image, the adopted MemorySegment on the JVM (read
+  // through the segment, so a closed or foreign-thread region is refused, not read after free).
   private long sourceAddress;
+  private @Nullable Object sourceRegion;
   private int materializedBytes;
   private @Nullable IdentityHashMap<Object, Object> materialized;
   private final SlabLimits limits;
@@ -168,10 +171,10 @@ public final class SlabSession implements AutoCloseable {
       if ((word(HEADER_FLAGS) & BORROWING) != 0) {
         source = retained;
         transferred = true;
-        sourceAddress =
-            ImageInfo.inImageCode()
-                ? ((BuffaSvm.Address) Objects.requireNonNull(input.lease.attachment)).value()
-                : FfmBackend.nativeAddress(input);
+        if (ImageInfo.inImageCode())
+          sourceAddress =
+              ((BuffaSvm.Address) Objects.requireNonNull(input.lease.attachment)).value();
+        else sourceRegion = Objects.requireNonNull(input.lease.attachment);
       }
       try {
         if (validateBorrow) validate();
@@ -214,6 +217,7 @@ public final class SlabSession implements AutoCloseable {
       source = null;
     }
     sourceAddress = 0;
+    sourceRegion = null;
   }
 
   /** Explicit reset invalidates borrows and retains arena capacity for the next decode. */
@@ -478,9 +482,7 @@ public final class SlabSession implements AutoCloseable {
     if (offset < 0 || offset >= retained.bytes.capacity()) throw outside();
     if (ImageInfo.inImageCode())
       return WordFactory.<Pointer>pointer(sourceAddress + offset).readByte(0) & 255;
-    int value = FfmBackend.readAddressByte(sourceAddress + offset);
-    java.lang.ref.Reference.reachabilityFence(this);
-    return value;
+    return FfmBackend.readRegionByte(Objects.requireNonNull(sourceRegion), offset);
   }
 
   @TruffleBoundary

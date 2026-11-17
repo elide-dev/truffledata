@@ -44,6 +44,12 @@ final class FfmBackend implements BuffaWire.Backend {
     return (long) SLAB_LONG.get(MemorySegment.ofAddress(address).reinterpret(8), 0L);
   }
 
+  /** A byte of an adopted region, through the segment: its scope and thread checks apply. */
+  @CompilerDirectives.TruffleBoundary(allowInlining = true)
+  static int readRegionByte(Object region, long offset) {
+    return ((MemorySegment) region).get(ValueLayout.JAVA_BYTE, offset) & 255;
+  }
+
   @CompilerDirectives.TruffleBoundary(allowInlining = true)
   static int readAddressByte(long address) {
     return ((byte) SLAB_BYTE.get(MemorySegment.ofAddress(address).reinterpret(1), 0L)) & 255;
