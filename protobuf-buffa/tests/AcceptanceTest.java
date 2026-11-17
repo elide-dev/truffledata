@@ -79,6 +79,35 @@ final class AcceptanceTest {
     Acceptance.check(released.get() == 1, "adopted source released exactly once");
   }
 
+  /** #112: a borrowed payload read checks the adopted region's scope, never reading freed memory. */
+  @Test
+  void borrowedBytesAreRefusedOnceTheAdoptedRegionCloses() throws Exception {
+    var contract = TypedAcceptance.projectedPlan(dev.elide.truffledata.Limits.DEFAULT);
+    var projection =
+        dev.elide.truffledata.protobuf.Projection.builder(contract)
+            .select("id", "text", "blob")
+            .build()
+            .lazyChildren()
+            .borrowBytes(1);
+    // id = 7, blob = "A", and the omitted child that makes the slab borrow its input.
+    byte[] wire = {8, 7, 26, 1, 65, 34, 0};
+    try (var decoder = BuffaWire.open(BuffaWire.Mode.NATIVE, library());
+        var compiled = decoder.compile(contract, 65536);
+        var selected = compiled.project(projection);
+        var session = selected.newSession(65536)) {
+      var arena = java.lang.foreign.Arena.ofConfined();
+      var segment = arena.allocate(wire.length);
+      segment.copyFrom(java.lang.foreign.MemorySegment.ofArray(wire));
+      try (var input = BuffaJvm.adopt(segment, () -> {})) {
+        var row = (BorrowedSlabRow) session.decode(input);
+        var blob = (BorrowedSlabArray) row.get(2);
+        Acceptance.check((Long) blob.element(0) == 65, "borrowed byte of the live region");
+        arena.close();
+        Acceptance.rejects(() -> blob.element(0), IllegalStateException.class);
+      }
+    }
+  }
+
   @Test
   void cachedLifetimeChecksSurviveCloseAndCacheSaturation() throws Exception {
     try (var decoder = BuffaWire.open(BuffaWire.Mode.NATIVE, library())) {
