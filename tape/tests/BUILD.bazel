@@ -4,11 +4,14 @@ load("@rules_java//java:defs.bzl", "java_test")
 java_test(
     name = "jvm",
     srcs = [
+        "AliasExportKeyTest.java",
         "CompactTapeTest.java",
         "TapeBuilderDecimalRawSpanTest.java",
         "TapeOwnerTest.java",
     ],
     args = [
+        "--class",
+        "dev.elide.truffledata.tape.AliasExportKeyTest",
         "--class",
         "dev.elide.truffledata.tape.TapeOwnerTest",
         "--class",

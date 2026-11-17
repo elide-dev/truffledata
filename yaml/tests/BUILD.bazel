@@ -29,6 +29,7 @@ data_java_library(
 java_test(
     name = "jvm",
     srcs = [
+        "AliasKeyExportReproTest.java",
         "JavaKernelDifferentialTest.java",
         "JavaKernelTest.java",
         "JsonSubsetDifferentialTest.java",
@@ -43,6 +44,8 @@ java_test(
         "YamlPlanTest.java",
     ],
     args = [
+        "--class",
+        "dev.elide.truffledata.yaml.tests.AliasKeyExportReproTest",
         "--class",
         "dev.elide.truffledata.yaml.tests.YamlIntegrationTest",
         "--class",

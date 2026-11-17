@@ -154,7 +154,14 @@ public final class TruffleSink implements TapeSink {
   public void key(TapeText name) {
     if (key != null || open.isEmpty() || !(open.get(open.size() - 1) instanceof Map))
       throw new IllegalStateException("Key outside a member position");
-    key = keys.intern(name);
+    TruffleString resolved = keys.intern(name);
+    if (pendingAnchor >= 0) {
+      Map<Integer, @Nullable Object> table = anchors;
+      if (table == null) anchors = table = new LinkedHashMap<>();
+      table.put(pendingAnchor, resolved);
+      pendingAnchor = -1;
+    }
+    key = resolved;
   }
 
   @Override
