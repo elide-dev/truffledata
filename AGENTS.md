@@ -171,3 +171,12 @@ publication, and public artifact verification. Central stays deferred under #28 
 resets (2026-12-01); do not retry it without instruction. The same evidence, safety and
 honest-reporting rules apply. No benchmark capture is taken; there is no performance claim. Never
 add `Co-Authored-By` trailers for Claude.
+
+## 0.14.0 release completion (2026-11-16)
+
+0.14.0 is released on Elide Maven and GitHub from signed tag `v0.14.0` at
+`55de716347ed347ac6739f9124aea8125b8b10c2`, on Myna 0.19.0. As for 0.13.1, the publish skipped the
+gates main CI had already run and kept the per-platform consumer gates. Central was not attempted
+(#28, quota resets 2026-12-01). The public artifacts were verified against the staged bytes.
+Receipts: `benchmarks/results/release-0.14.0/`. The macOS native CI jobs now run on the self-hosted
+macOS executor (`--config=remote_macos`, #124). Open: elide-dev/myna#159, elide-dev/trufflecheck#9.
