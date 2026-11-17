@@ -28,10 +28,15 @@ jobs:
             platform: --dynamic_mode=off --platforms=//bazel/platforms:linux_arm64_musl
             shared: false
           - target: aarch64-apple-darwin
+            # Trusted runs execute on the self-hosted macOS executor (--config=remote_macos) from a Linux runner;
+            # fork PRs, which get no BuildBuddy key, build on a hosted macOS runner.
             runner: macos-15
+            remote: true
             platform: ''
             shared: true
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.remote && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && 'ubuntu-24.04' || matrix.runner }}
+    env:
+      BAZEL_CONFIG: ${{ matrix.remote && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && 'remote_macos' || 'local' }}
     timeout-minutes: 45
     steps:
       - name: Harden runner
@@ -54,15 +59,15 @@ jobs:
       - name: Native kernel and isolated archive acceptance
         env:
           TARGET_PLATFORM: ${{ matrix.platform }}
-        run: bazel test --config=local $TARGET_PLATFORM //csv/native:api_test //csv/native:index_test //tools/release:csv_archive_test
+        run: bazel test --config=$BAZEL_CONFIG $TARGET_PLATFORM //csv/native:api_test //csv/native:index_test //tools/release:csv_archive_test
       - name: Shared loading and ThinLTO acceptance
         if: matrix.shared
-        run: bazel test --config=local //tools/release:csv_c_static_test //tools/release:csv_c_thinlto_test
+        run: bazel test --config=$BAZEL_CONFIG //tools/release:csv_c_static_test //tools/release:csv_c_thinlto_test
       - name: Musl static ThinLTO acceptance
         if: ${{ !matrix.shared }}
         env:
           TARGET_PLATFORM: ${{ matrix.platform }}
-        run: bazel test --config=local $TARGET_PLATFORM //tools/release:csv_musl_c_static_test //tools/release:csv_musl_c_thinlto_test
+        run: bazel test --config=$BAZEL_CONFIG $TARGET_PLATFORM //tools/release:csv_musl_c_static_test //tools/release:csv_musl_c_thinlto_test
       - name: Remove BuildBuddy credentials
         if: always()
         run: rm -f user.bazelrc
@@ -85,10 +90,15 @@ jobs:
             platform: --dynamic_mode=off --platforms=//bazel/platforms:linux_arm64_musl
             shared: false
           - target: aarch64-apple-darwin
+            # Trusted runs execute on the self-hosted macOS executor (--config=remote_macos) from a Linux runner;
+            # fork PRs, which get no BuildBuddy key, build on a hosted macOS runner.
             runner: macos-15
+            remote: true
             platform: ''
             shared: true
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.remote && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && 'ubuntu-24.04' || matrix.runner }}
+    env:
+      BAZEL_CONFIG: ${{ matrix.remote && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && 'remote_macos' || 'local' }}
     timeout-minutes: 45
     steps:
       - name: Harden runner
@@ -111,15 +121,15 @@ jobs:
       - name: Native decoder and isolated archive acceptance
         env:
           TARGET_PLATFORM: ${{ matrix.platform }}
-        run: bazel test --config=local $TARGET_PLATFORM //yaml/native:api_test //yaml/native:input_test //yaml/native:stream_test //tools/release:yaml_archive_test
+        run: bazel test --config=$BAZEL_CONFIG $TARGET_PLATFORM //yaml/native:api_test //yaml/native:input_test //yaml/native:stream_test //tools/release:yaml_archive_test
       - name: Shared loading and ThinLTO acceptance
         if: matrix.shared
-        run: bazel test --config=local //tools/release:yaml_c_static_test //tools/release:yaml_c_thinlto_test
+        run: bazel test --config=$BAZEL_CONFIG //tools/release:yaml_c_static_test //tools/release:yaml_c_thinlto_test
       - name: Musl static ThinLTO acceptance
         if: ${{ !matrix.shared }}
         env:
           TARGET_PLATFORM: ${{ matrix.platform }}
-        run: bazel test --config=local $TARGET_PLATFORM //tools/release:yaml_musl_c_static_test //tools/release:yaml_musl_c_thinlto_test
+        run: bazel test --config=$BAZEL_CONFIG $TARGET_PLATFORM //tools/release:yaml_musl_c_static_test //tools/release:yaml_musl_c_thinlto_test
       - name: Remove BuildBuddy credentials
         if: always()
         run: rm -f user.bazelrc

@@ -97,6 +97,23 @@ constraint_value(
     ("arm64", "aarch64"),
 ]]
 
+# The organization's self-hosted macOS arm64 executor (--config=remote_macos): bare metal, no container or VM
+# isolation, registered in pool komodo-release-macos-arm64 (MY_POOL in its launchd job). Actions use the build's
+# hermetic toolchains plus the executor's Command Line Tools SDK.
+platform(
+    name = "rbe_macos_arm64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:aarch64",
+    ],
+    exec_properties = {
+        "OSFamily": "darwin",
+        "Arch": "arm64",
+        "use-self-hosted-executors": "true",
+        "Pool": "komodo-release-macos-arm64",
+    },
+)
+
 # Opt-in GCP workers: same image/toolchains and hermetic network policy as hosted RBE.
 platform(
     name = "rbe_linux_amd64_shared",
