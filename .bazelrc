@@ -93,6 +93,15 @@ common:remote_arm64 --platforms=//bazel/platforms:rbe_linux_arm64
 common:remote_arm64 --host_platform=//bazel/platforms:rbe_linux_arm64
 
 
+# macOS arm64 remote execution (--config=remote_macos) on the self-hosted executor, for the macos-aarch64 natives and
+# their tests. Its own cache namespace: the macOS C/C++ wrapper selects the executor's SDK outside action keys, so
+# these results never share entries with Linux or with developer machines.
+common:remote_macos --config=remote
+common:remote_macos --platforms=//bazel/platforms:rbe_macos_arm64
+common:remote_macos --host_platform=//bazel/platforms:rbe_macos_arm64
+common:remote_macos --remote_instance_name=elide-dev/truffledata/macos/v1
+common:remote_macos --jobs=16
+
 # Nearby GCP execution; selected by trusted CI only after shared-cache setup succeeds.
 # --config=remote retains hosted BuildBuddy execution; --config=local remains host-local.
 common:shared_cache --remote_executor=grpcs://elide-dev.buildbuddy.io:443
