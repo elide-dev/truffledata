@@ -414,6 +414,7 @@ final class JavaKernelDifferentialTest {
       "!!seq a", "%TAG !e! tag:example.com,2000:app/\n--- !e!foo bar\n", "[!!str a, !!str b, !x c, !x d]",
       "!local 12", "[!!str 12, ! 13]", "!!merge x", "!!value =", "!!value x", "{!!merge <<: 1}",
       "%TAG !a! tag:a:\n%TAG !b! tag:b:\n%TAG !c! tag:c:\n%TAG !d! tag:d:\n%TAG !e! tag:e:\n--- !e!x y\n",
+      "a: !<> v", "!<> v",
       // Unicode and input
       "[\"\\ud83d\\ude00\",\"prefix \\ud83d\\ude00 suffix\",\"\\U0001F600\"]", "\"\\ud800\"", "\"\\udc00\"",
       "\"\\ud800x\"", "\"\\U00110000\"", "{\"\u00f0\u009f\u0098\u0080\": 1, \"\\ud83d\\ude00\": 2}",
@@ -435,7 +436,11 @@ final class JavaKernelDifferentialTest {
       "- 0123456789abcdef\n- 0123456789abcdefg\n- \"\\u00e9t\\u00e9 quoted, longer\"\n- |\n  literal block text\n- \"\\L grows\"\n",
       "Engine 3.2 lacks the YAML 1.2 \\L and \\P escapes (U+2028, U+2029)",
       "--- |\nline\n---\nnext\n", "Engine rejects block scalar content at column 0 of a root node",
-      "a: \u0085b", "Engine folds NEL (U+0085) as a YAML 1.1 line break; YAML 1.2 and rapidyaml keep it as content");
+      "a: \u0085b", "Engine folds NEL (U+0085) as a YAML 1.1 line break; YAML 1.2 and rapidyaml keep it as content",
+      "a: !<> v",
+      "Engine reports the parser rejection of the empty verbatim tag as truncation at end-of-stream; the native handler rejects it as a syntax error",
+      "!<> v",
+      "Engine reports the parser rejection of the empty verbatim tag as truncation at end-of-stream; the native handler rejects it as a syntax error");
 
   @Test
   void policyCases() {

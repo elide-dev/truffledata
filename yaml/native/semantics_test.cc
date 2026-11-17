@@ -259,6 +259,11 @@ void tags() {
   yaml_session r(with(strict));
   require(message(r, "!local 12") == "YAML unknown tag");
   require(tape(r, "[!!str 12, ! 13]") == "[\"12\",\"13\"]");
+  // A verbatim tag with an empty URI (`!<>`) is malformed (YAML 1.2: `!<ns-uri-char+>`);
+  // rapidyaml 0.16.0 scans it permissively, so the decoder rejects it here like snakeyaml-engine.
+  require(message(s, "a: !<> v") == "YAML invalid tag");
+  require(message(s, "!<> v") == "YAML invalid tag");
+  require(failure(s, "!<> v").code == status_syntax);
   // Many distinct tags exercise rapidyaml's tag cache and the interning table past their inline sizes.
   std::string many = "[";
   for (int i = 0; i < 100; ++i) many += "!t" + std::to_string(i) + " v, ";

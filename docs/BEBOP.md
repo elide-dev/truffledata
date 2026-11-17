@@ -5,7 +5,7 @@ the 2026 **indexed** wire layout (`docs/WIRE.md` at `2026.0.0-alpha.6`), and rea
 in place from Truffle guests. It is pure Java: one jar serves the JVM and Native Image. An optional
 native validator (`//bebop/native`, Rust) is opt-in.
 
-Status: experimental and unpublished. Nothing here is a frozen wire profile.
+Status: experimental. Nothing here is a frozen wire profile.
 
 ```java
 BebopSchema schema =
@@ -275,6 +275,6 @@ wire and resource case through the native validator.
 - Randomized differential testing against the upstream C runtime (it is driven only to write the
   checked-in values, on macOS, outside the build).
 - Scan kernels over spans, and SIMD validation of anything but UTF-8.
-- Registration in the root source-policy and JIT-matrix tests, release packaging and publishing.
+- Registration in the root source-policy and JIT-matrix tests.
 - SVM timings of any kind. No performance claim is made for any path, native validator included.
 - Anything above the codec: object schemas, identity and trust integration, query semantics.

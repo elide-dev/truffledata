@@ -29,6 +29,7 @@ data_java_library(
 java_test(
     name = "jvm",
     srcs = [
+        "AliasKeyExportReproTest.java",
         "JavaKernelDifferentialTest.java",
         "JavaKernelTest.java",
         "JsonSubsetDifferentialTest.java",
@@ -36,12 +37,15 @@ java_test(
         "SnakeYamlDifferentialTest.java",
         "SnakeYamlEventSourceTest.java",
         "YamlContractTest.java",
+        "YamlDecimalZeroSpanTest.java",
         "YamlEmitterTest.java",
         "YamlFuzz.java",
         "YamlIntegrationTest.java",
         "YamlPlanTest.java",
     ],
     args = [
+        "--class",
+        "dev.elide.truffledata.yaml.tests.AliasKeyExportReproTest",
         "--class",
         "dev.elide.truffledata.yaml.tests.YamlIntegrationTest",
         "--class",
@@ -62,6 +66,8 @@ java_test(
         "dev.elide.truffledata.yaml.tests.JavaKernelTest",
         "--class",
         "dev.elide.truffledata.yaml.tests.JavaKernelDifferentialTest",
+        "--class",
+        "dev.elide.truffledata.yaml.tests.YamlDecimalZeroSpanTest",
     ],
     data = [
         "java_kernel_excluded.txt",
