@@ -10,7 +10,12 @@ use std::{
 };
 #[allow(dead_code, unused_imports)]
 mod seam {
-    include!("generated/seam.rs");
+    include!("generated/seam_types.rs");
+}
+
+#[allow(unused_imports, unused_macros)]
+mod seam_checks {
+    include!("generated/seam_impl.rs");
 }
 
 mod slab;
@@ -612,7 +617,7 @@ pub unsafe extern "C" fn td_buffa_decode_slab_small(
         )
     })
 }
-seam::assert_implementations!(seam);
+seam_checks::assert_implementations!(seam);
 
 #[cfg(test)]
 mod tests {

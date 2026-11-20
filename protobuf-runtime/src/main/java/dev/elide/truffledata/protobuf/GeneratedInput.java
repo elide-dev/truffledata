@@ -25,7 +25,7 @@ public final class GeneratedInput {
   }
 
   private static ContractViolation bad(String reason) {
-    CompilerDirectives.transferToInterpreterAndInvalidate();
+    CompilerDirectives.transferToInterpreter();
     return new ContractViolation(reason);
   }
 

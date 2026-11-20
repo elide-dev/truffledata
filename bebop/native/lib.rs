@@ -7,7 +7,12 @@
 
 #[allow(dead_code, non_camel_case_types)]
 mod seam {
-    include!("generated/seam.rs");
+    include!("generated/seam_types.rs");
+}
+
+#[allow(unused_imports, unused_macros)]
+mod seam_checks {
+    include!("generated/seam_impl.rs");
 }
 
 mod validate;
@@ -55,7 +60,7 @@ pub unsafe extern "C" fn td_bebop_validate_leaf(
     unsafe { td_bebop_validate(program, program_length, data, length) }
 }
 
-seam::assert_implementations!(seam);
+seam_checks::assert_implementations!(seam);
 
 unsafe fn region<'a>(pointer: *const u8, length: u64) -> &'a [u8] {
     if length == 0 || pointer.is_null() {
