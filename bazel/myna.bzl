@@ -59,6 +59,8 @@ def myna_bindings(name, seam, java_class, java_package, out = "generated", abi =
         # Every truffledata seam names `abi=`, so Myna always emits its ABI_VERSION here.
         java_class + "Constants.java",
         "seam.rs",
+        "seam_types.rs",
+        "seam_impl.rs",
         "seam.h",
         "seam.json",
         "seam.abi",

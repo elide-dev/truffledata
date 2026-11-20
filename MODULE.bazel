@@ -1,6 +1,6 @@
 module(
     name = "truffledata",
-    version = "0.14.0",
+    version = "0.15.0",
 )
 
 bazel_dep(name = "platforms", version = "1.1.0")
@@ -21,12 +21,12 @@ git_override(
     remote = "https://github.com/sgammon/rules_graalvm.git",
 )
 
-GRAALVM = "25.5.5-elide.28"
+GRAALVM = "25.5.5-elide.31"
 
 GRAALVM_DISTS = {
-    "macos-aarch64": "8a244c653dc7875c72efbb8e1a42b5dd8e11fe73e616beb6b84e598ab170b207",
-    "linux-x64": "398d8587d0ac7ab2610a979cdc43f0ad03a484b4be0e09a1bcc64f2ec703f148",
-    "linux-aarch64": "c4d0426c5a06a6e36f8d946d2b1ba5915f54373d35ebd53397501c2c6b189b7a",
+    "macos-aarch64": "bccdd3ce58c401a9c5eef0e9c6d68f9418f7c464808be49732aeebec28731bf8",
+    "linux-x64": "c00fbb240c6d37b5a43ed0d6200c24e5f7abc56ed7225582e439cf6a8c8fa338",
+    "linux-aarch64": "1d3488c74ed1d156b144c6d5812b4c9dc3446c1a3919f8351e0108d4a425f38a",
 }
 
 # The fork names its archives macos-aarch64, linux-amd64 and linux-aarch64.
@@ -35,9 +35,9 @@ GRAALVM_ARCHIVES = {key: key.replace("x64", "amd64") for key in GRAALVM_DISTS}
 # The EE toolchain profile (docs/NATIVE_BENCHMARKS.md): the fork's Oracle GraalVM overlay of the same release, the test and
 # run runtime under --config=ee (compilation stays on CE). Its budgets and graph expectations are tracked separately.
 GRAALVM_EE_DISTS = {
-    "macos-aarch64": "1a02d7bf08a024805b93a201d28f7113d9236751f80179bce6b0f1caed38af3d",
-    "linux-x64": "95ed83fdc6e0de7ffa69226cd031762ea759a0212d583c47bcfd368fe18bbb45",
-    "linux-aarch64": "ffa1c91cb63e095d1aa8618ad04d1811da586508e0db8c26ac31e60661a29a38",
+    "macos-aarch64": "8bb9bb51a014b4064ebaf9e05cde852ba713630b7bfa09c352ddaa9446c11525",
+    "linux-x64": "dbe142f1065baa42420e9378b12d44d737ffd3fab0b097e8b9a182f67efd83e4",
+    "linux-aarch64": "1e017aeb8c10215e46a427e2cba38252828e13a270cce6dee9750c69bd4c4e38",
 }
 
 # One repository per platform and edition (graalvm_<os>_<cpu>, graalvm_ee_<os>_<cpu>), its toolchains constrained to that
@@ -217,12 +217,12 @@ go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 # ---- C/C++: elide-dev/toolchain (LLVM 23, libc++, lld, ThinLTO bitcode sysroots).
-ELIDE_TOOLCHAIN = "2026.11.6"
+ELIDE_TOOLCHAIN = "2026.11.7"
 
 ELIDE_TOOLCHAIN_BUNDLES = {
-    "darwin_arm64": ("darwin-arm64", "6991bdab452cc0a06e132615362658c590077b0d8a1ccfe0797dce610b987a61"),
-    "linux_amd64": ("linux-amd64", "5df3cba750336d628fe2c5150215a28c738221bf51bd16904168ab20bef02110"),
-    "linux_arm64": ("linux-arm64", "47838559c5eb8978730726c963c3f22c905c7a587c1290a53f24c2dce1c46154"),
+    "darwin_arm64": ("darwin-arm64", "69d312ff9d0bf7158942e9d7220278930c4106d5b246482485e2f7da1a6db4c7"),
+    "linux_amd64": ("linux-amd64", "697cb494450d47630629e5ac905bca8400611030361305e32b86eb818ae407a5"),
+    "linux_arm64": ("linux-arm64", "ed353fbc779d2179de2c0631c6e1de56fe9ebda3a981460d01d34239da4058a8"),
 }
 
 [http_archive(
@@ -270,7 +270,7 @@ http_file(
 # Optional Buffa backend: reproducible Rust compilation under the same RBE toolchain.
 bazel_dep(name = "rules_rust", version = "0.74.0")
 
-# Match elide-dev/toolchain v2026.11.6 rustversion (LLVM 23.1.3; unchanged since v2026.11.1).
+# Match elide-dev/toolchain v2026.11.7 rustversion (LLVM 23.1.3; unchanged since v2026.11.1).
 RUST_VERSION = "nightly/2026-10-09"
 
 RUST_SHA256S = {
@@ -360,10 +360,10 @@ use_repo(crate, "crates", simdutf_src = "crates__simdutf-0.7.0")
 http_archive(
     name = "myna",
     build_file = "//bazel:myna.BUILD",
-    sha256 = "d63100887db098c3ea96f27037fdbc3b190db3b48db85dbe46b661701d3dd558",
-    strip_prefix = "myna-0.19.0",
+    sha256 = "4e291ba497318eccfea75f1006a013b0370b77475391af631449c1b197818f2b",
+    strip_prefix = "myna-0.20.0",
     type = "tar.gz",
-    urls = ["https://github.com/elide-dev/myna/releases/download/v0.19.0/myna-source-0.19.0.tar.gz"],
+    urls = ["https://github.com/elide-dev/myna/releases/download/v0.20.0/myna-source-0.20.0.tar.gz"],
 )
 
 # Production JSON adapter: match the parser qualified by Myna's value ABI tests.
@@ -377,16 +377,15 @@ http_archive(
 )
 
 # Production YAML parser (docs/superpowers/plans/2026-11-06-yaml.md D1). The overlay fixes the
-# configuration: assertions off, tab tokens, exception callbacks. Two patches: pending tag/anchor
-# annotations are bounded by a parse error instead of a compiled-out assertion, and a missing
-# same-line annotation is a parse error instead of an unreachable point (fuzz findings;
-# bazel/patches/rapidyaml-annotation-bounds.patch, rapidyaml-same-line-annotations.patch).
+# configuration: assertions off, tab tokens, exception callbacks. The patches enforce annotation
+# bounds, reject missing same-line annotations, and rewind empty block scalars to their header.
 http_archive(
     name = "rapidyaml",
     build_file = "//bazel:rapidyaml.BUILD",
     patch_strip = 1,
     patches = [
         "//bazel/patches:rapidyaml-annotation-bounds.patch",
+        "//bazel/patches:rapidyaml-block-header-rewind.patch",
         "//bazel/patches:rapidyaml-same-line-annotations.patch",
     ],
     sha256 = "a0ce80a8f4211580c8703e57acb813a28ca6ec80908f6eb926be94be8e98d39d",
@@ -434,7 +433,7 @@ sanitizer_toolchain = use_repo_rule("//bazel:sanitizer_toolchain_repo.bzl", "san
 
 sanitizer_toolchain(
     name = "elide_toolchain_asan",
-    addon_sha256 = "a1a999fcaf7bbee4991e26b2a8f21b43f1f0879e08126df1ef5c400cff167274",
+    addon_sha256 = "572d1e563ebef92ecbc3f593c967af19e2234d82ed984446de0d4254ed2de98f",
     addon_urls = ["https://github.com/elide-dev/toolchain/releases/download/v%s/elide-toolchain-%s-linux-amd64-sanitizer-asan.tar.xz" % (ELIDE_TOOLCHAIN, ELIDE_TOOLCHAIN)],
     base_sha256 = ELIDE_TOOLCHAIN_BUNDLES["linux_amd64"][1],
     base_urls = ["https://github.com/elide-dev/toolchain/releases/download/v%s/elide-toolchain-%s-linux-amd64.tar.xz" % (ELIDE_TOOLCHAIN, ELIDE_TOOLCHAIN)],

@@ -14,7 +14,17 @@ The pinned GraalVM fork version is shared by the SDK toolchains and Maven artifa
 
 ## Native optimization
 
-The Elide toolchain is pinned to v2026.11.6. Rust target compilation, host Cargo tooling, rustfmt, and rust-analyzer use its `rustversion` recommendation, `nightly-2026-10-09` (Rust LLVM 23.1.3). `rust-toolchain.toml` gives local tools the same dated pin; Bazel downloads have explicit SHA256 checksums.
+The Elide toolchain is pinned to v2026.11.7. Rust target compilation, host Cargo tooling, rustfmt, and rust-analyzer use its `rustversion` recommendation, `nightly-2026-10-09` (Rust LLVM 23.1.3). `rust-toolchain.toml` gives local tools the same dated pin; Bazel downloads have explicit SHA256 checksums.
+
+The 2026.11.7 bundle also ships Cargo and rustc in `rust/bin`. To test the standalone
+CSV and JSON crates with the release compiler, set `ELIDE_TOOLCHAIN_ROOT` to the
+extracted host bundle and run these commands from the checkout.
+
+```sh
+export PATH="$ELIDE_TOOLCHAIN_ROOT/rust/bin:$PATH"
+cargo test --locked --manifest-path csv/native/crate/Cargo.toml
+cargo test --locked --manifest-path json/native/crate/Cargo.toml
+```
 
 Default builds use `--compilation_mode=opt`, including transitive Rust crates. An adapter's explicit `-Copt-level=3` does not optimize its dependencies in `fastbuild`.
 

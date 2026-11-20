@@ -1,0 +1,19 @@
+--- a/src/c4/yml/parse_engine.def.hpp
++++ b/src/c4/yml/parse_engine.def.hpp
+@@ -2328,6 +2328,7 @@
+ 
+     // finish the current line
+     _line_progressed(s.len);
++    const LineContents header_line = m_evt_handler->m_curr->line_contents;
+     _line_ended();
+     _scan_line();
+ 
+@@ -2397,6 +2398,8 @@
+                         if(raw_block.len == 0)
+                         {
+                             _c4dbgp("blck: was empty, undo next line");
++                            // Rewind the header using its own line ending, before the peek.
++                            m_evt_handler->m_curr->line_contents = header_line;
+                             _line_ended_undo();
+                         }
+                         break;

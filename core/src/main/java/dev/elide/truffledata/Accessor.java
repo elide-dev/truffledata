@@ -170,7 +170,7 @@ public abstract class Accessor {
 
   /** Rejection of a row this accessor does not accept; the caller transfers to the interpreter. */
   protected final ContractViolation mismatch() {
-    CompilerDirectives.transferToInterpreterAndInvalidate();
+    CompilerDirectives.transferToInterpreter();
     return new ContractViolation("Accessor layout mismatch");
   }
 
