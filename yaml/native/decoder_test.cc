@@ -99,6 +99,9 @@ void values() {
           "[u18446744073709551615,d18446744073709551616,d1e400,d1e400]");
   require(tape(s, "k: 'single ''q'''\nd: \"tab\\there\"\nl: |\n  line\n  two\nf: >-\n  folded\n  text\n") ==
           "{\"k\":\"single 'q'\",\"d\":\"tab\\there\",\"l\":\"line\\ntwo\\n\",\"f\":\"folded text\"}");
+  // The empty block ends at its header. The dedented sibling has its own line ending.
+  require(tape(s, "service:\n  description: |\r\nenabled: true\n") ==
+          "{\"service\":{\"description\":\"\"},\"enabled\":true}");
   require(tape(s, "plain: multi\n  line\n") == "{\"plain\":\"multi line\"}");
   require(tape(s, "!!str 12") == "\"12\"");
   require(tape(s, "- !!int \"12\"\n- !!float 1\n- ! 12\n- !!null ''\n") == "[12,f1,\"12\",null]");
