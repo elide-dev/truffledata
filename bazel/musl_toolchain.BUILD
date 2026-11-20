@@ -19,7 +19,8 @@ filegroup(
     name = "all_files",
     srcs = glob(
         ["**"],
-        exclude = ["**/* *"],
+        # rules_rust supplies rustc and its standard library separately.
+        exclude = ["**/* *", "rust/**", "share/elide-toolchain/licenses/**"],
     ),
 )
 

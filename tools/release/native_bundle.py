@@ -75,7 +75,7 @@ def bundle(repository, version, module, classifier, header, llvm, output, revisi
         'abiFingerprint': fingerprint.decode(), 'compiler': compiler, 'license': 'MIT OR Apache-2.0',
         'linkLibraries': ['c++'] if mac else ['c++', 'c++abi', 'dl', 'pthread', 'm'],
         'minimumRuntime': ({'macos': '12.0'} if mac else {'musl': '1.2.5'} if musl else {'glibc': glibc_floor(llvm / 'llvm-readobj', shared)}),
-        'minimumRuntimeBasis': 'deployment target' if mac else 'tested static-link baseline from elide-toolchain 2026.11.5' if musl else 'highest versioned dependency of the matching shared library',
+        'minimumRuntimeBasis': 'deployment target' if mac else 'tested static-link baseline from the bundled musl sysroot' if musl else 'highest versioned dependency of the matching shared library',
         'staticFormat': 'machine-code with separate LLVM 23 ThinLTO archive' if mac else 'ELF FatLTO (LLVM 23)',
         'ltoLinker': 'ld64.lld' if mac else 'ld.lld',
         'dependencies': [{'name': 'simdutf', 'version': '7.7.1', 'sourcePackage': 'simdutf-0.7.0', 'source': 'https://github.com/simdutf/simdutf/tree/v7.7.1'}] if module == 'csv-native' else [],

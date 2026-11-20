@@ -143,7 +143,7 @@ Buffa, JSON, YAML and CSV native attachments. See
 Release **0.15.0** updates the native libraries to Elide toolchain 2026.11.7 and the bindings
 to Myna 0.20.0. Buffa and the experimental Bebop validator compile Myna’s implementation
 checks against the generated Rust records. The shared cells runtime accepts host `BigInteger`
-arguments for integer coercion.
+arguments for integer coercion. See the [0.15.0 notes](docs/RELEASE_0_15_0.md).
 
 Release **0.14.0** moves the bindings to Myna 0.19.0: each seam now declares its status codes, flags,
 limits and code tables once, as generated constants shared by C++, Rust and Java, with typed struct and
