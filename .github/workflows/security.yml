@@ -42,7 +42,16 @@ jobs:
           //csv/native:api_test //csv/native:index_test //csv/native:index_replay
           //tape/native:ctape_test
       - name: Rust ASan regressions
-        run: bazel test --config=asan-rust //protobuf-buffa/native:test //bebop/native:test
+        run: >-
+          bazel test --config=asan-rust //protobuf-buffa/native:test //bebop/native:test
+          //yaml/native/rs:test //yaml/native:session_rs_replay //yaml/native:rust_source_test
+      - name: YAML Rust parser backend campaign (opt-in backend; C++ and Rust instrumented)
+        run: >-
+          bazel test --config=fuzz
+          --@rules_rust//rust/settings:extra_rustc_flags=-Zsanitizer=address,-Zexternal-clangrt
+          --nocache_test_results --test_timeout=1200
+          --test_env="TD_FUZZ_SECONDS=$TD_FUZZ_SECONDS"
+          //yaml/native:session_rs_fuzz
       - name: Native coverage-guided campaigns
         run: >-
           bazel test --config=fuzz --nocache_test_results --test_timeout=1200

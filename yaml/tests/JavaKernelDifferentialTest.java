@@ -239,7 +239,9 @@ final class JavaKernelDifferentialTest {
 
   static Map<String, String> excluded() throws Exception {
     Map<String, String> excluded = new TreeMap<>();
-    for (String line : Files.readAllLines(SnakeYamlDifferentialTest.workspace("yaml/tests/java_kernel_excluded.txt")))
+    // yaml.kernel.excluded: the Rust parser backend's own list (//yaml/tests:jvm_rs).
+    String list = System.getProperty("yaml.kernel.excluded", "yaml/tests/java_kernel_excluded.txt");
+    for (String line : Files.readAllLines(SnakeYamlDifferentialTest.workspace(list)))
       if (!line.isBlank() && !line.startsWith("#")) {
         String[] parts = line.split("\t", 2);
         excluded.put(parts[0], parts.length > 1 ? parts[1] : "");
@@ -442,14 +444,29 @@ final class JavaKernelDifferentialTest {
       "!<> v",
       "Engine reports the parser rejection of the empty verbatim tag as truncation at end-of-stream; the native handler rejects it as a syntax error");
 
+  /**
+   * Additional divergences of the opt-in Rust parser backend (//yaml/tests:jvm_rs, system property
+   * yaml.kernel.backend=rust). They apply to that run only, so they never mask the default
+   * rapidyaml run.
+   */
+  static final Map<String, String> POLICY_DIVERGENCES_RS = Map.of(
+      "[a]: b\n", "Rust backend: granit announces the complex key before its scalar, so JSON reports 'YAML complex key' first (same status)",
+      "{a: 1}: x\n", "Rust backend: as [a]: b (same status, message order)",
+      "[[a]: b]", "Rust backend: as [a]: b (same status, message order)",
+      "[{a: 1}: b]", "Rust backend: as [a]: b (same status, message order)",
+      "- |\n  a", "Rust backend: a clip block scalar ending the input without a line break has none (YAML 1.2.2 [165]); Engine and rapidyaml add one",
+      "a\n---\n[" + "[".repeat(129) + "]", "Rust backend (ruled 2026-11-14): granit reports the unclosed input (TRUNCATED) before the over-deep start (LIMIT)");
+
   @Test
   void policyCases() {
     Map<String, Sessions> sessions = sessions();
     List<String> failures = new ArrayList<>();
     try {
-      Set<String> stale = new TreeSet<>(POLICY_DIVERGENCES.keySet());
+      Map<String, String> divergences = new java.util.HashMap<>(POLICY_DIVERGENCES);
+      if ("rust".equals(System.getProperty("yaml.kernel.backend"))) divergences.putAll(POLICY_DIVERGENCES_RS);
+      Set<String> stale = new TreeSet<>(divergences.keySet());
       for (String input : POLICY_CASES)
-        account(input, compare(sessions, input, bytes(input), true, false), POLICY_DIVERGENCES, stale, failures);
+        account(input, compare(sessions, input, bytes(input), true, false), divergences, stale, failures);
       assertTrue(stale.isEmpty(), "Listed policy divergences that no longer diverge: " + stale);
       // Encodings: BOMs, UTF-16/32, invalid UTF-8.
       byte[][] encoded = {

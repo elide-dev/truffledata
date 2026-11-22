@@ -23,3 +23,25 @@ cc_test(
         "//yaml/native:tape_events",
     ],
 )
+
+# The same suite through the opt-in Rust parser backend (granit-parser behind rust_source.h): the
+# same handler, renderer, strict markers and chunked feeding; its own exact expected-failures list.
+cc_test(
+    name = "yaml_test_suite_rs",
+    size = "medium",
+    srcs = ["suite_test.cc"],
+    args = [
+        "--expected-failures=$(rootpath expected_failures_rs.txt)",
+        "$(rootpaths @yaml_test_suite//:inputs)",
+    ],
+    copts = ["-std=c++17"],
+    data = [
+        "expected_failures_rs.txt",
+        "@yaml_test_suite//:cases",
+        "@yaml_test_suite//:inputs",
+    ],
+    deps = [
+        "//yaml/native:decoder_rs",
+        "//yaml/native:tape_events",
+    ],
+)

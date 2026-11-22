@@ -1,0 +1,54 @@
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_static_library", "rust_test")
+
+package(default_visibility = ["//yaml:__subpackages__"])
+
+# The opt-in pure-Rust YAML parser backend (granit-parser 2.1.0). Not part of the default YAML
+# library or any release archive: //yaml/native:truffledata_yaml stays on rapidyaml.
+SRCS = [
+    "events.rs",
+    "ffi.rs",
+    "hostile.rs",
+    "lib.rs",
+    "tests.rs",
+]
+
+DEPS = ["@crates//:granit-parser"]
+
+rust_library(
+    name = "lib",
+    srcs = SRCS,
+    crate_name = "truffledata_yaml_parser",
+    crate_root = "lib.rs",
+    edition = "2024",
+    rustc_flags = ["-Copt-level=3"],
+    deps = DEPS,
+)
+
+# Linked into //yaml/native:truffledata_yaml_rs only.
+rust_static_library(
+    name = "truffledata_yaml_parser",
+    srcs = SRCS,
+    crate_name = "truffledata_yaml_parser",
+    crate_root = "lib.rs",
+    edition = "2024",
+    rustc_flags = ["-Copt-level=3"],
+    deps = DEPS,
+)
+
+# Event mapping, positions, panic containment, the yaml-test-suite rendered from the C records
+# (402/402 with strict flow and document markers, at three batch sizes), and the hostile-input
+# pins: 34 generated shapes scale linearly, deep nesting errors, the session corpus returns cleanly.
+rust_test(
+    name = "test",
+    size = "small",
+    crate = ":lib",
+    data = [
+        "//yaml/native:session_corpus",
+        "@yaml_test_suite//:cases",
+        "@yaml_test_suite//:inputs",
+    ],
+    env = {
+        "YAML_SESSION_CORPUS": "$(rootpaths //yaml/native:session_corpus)",
+        "YAML_TEST_SUITE_INPUTS": "$(rootpaths @yaml_test_suite//:inputs)",
+    },
+)

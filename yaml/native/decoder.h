@@ -357,6 +357,9 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     last_ = {};
     last_closed_ = SIZE_MAX;
     view_ = {};
+#ifdef TD_YAML_PARSER_RUST
+    external_position_ = {};
+#endif
   }
 
   // Test hook: false routes every scalar through the general resolver and writers, so tests can
@@ -373,8 +376,24 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   std::string_view strings() const { return {strings_.data(), strings_.size()}; }
   uint32_t document_flags() const { return flags_; }
   uint32_t version() const { return version_; }
+#ifndef TD_YAML_PARSER_RUST
   uint64_t line() const { return m_curr ? m_curr->pos.line : 0; }
   uint64_t column() const { return m_curr ? m_curr->pos.col : 0; }
+#else
+  // ---- positions from the Rust backend's driver (TD_YAML_PARSER_RUST, rust_source.h) ------------
+  // The event the driver is about to deliver: its 1-based line and code-point column, and its
+  // source token [begin, end) in the input (quotes included; a block scalar's content lines; a
+  // plain scalar's first to last content byte). line(), column() and the lexical spans of quoted,
+  // block and multi-line plain scalars come from here instead of rapidyaml's parser state. The
+  // rapidyaml build compiles none of this, so its library is byte-identical.
+  struct source_position {
+    uint64_t line = 0, column = 0;
+    size_t begin = 0, end = 0;
+  };
+  void external_position(const source_position& position) { external_position_ = position; }
+  uint64_t line() const { return external_position_.line; }
+  uint64_t column() const { return external_position_.column; }
+#endif
 
   // ---- members the parse engine reads directly ------------------------------------------------
   c4::yml::id_type m_curr_doc = 0;
@@ -1197,6 +1216,9 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   }
   [[gnu::noinline]] uint64_t lexical_slow(const char* text, size_t length, scalar_style style, bool empty) const {
     if (empty || !text) return 0;
+#ifdef TD_YAML_PARSER_RUST
+    return lexical_external(text, length, style);
+#endif
     const bool located = in_input(text, length);
     size_t position = m_curr->pos.offset;
     if (position > length_) position = length_;
@@ -1247,6 +1269,68 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
     }
     return 0;
   }
+#ifdef TD_YAML_PARSER_RUST
+  // The literal/folded case above for a content offset and token end (a copy, so the rapidyaml
+  // build's code stays byte-identical). granit's token starts at the first non-blank content line,
+  // so blank lines between the header and it are skipped.
+  uint64_t block_span(size_t content, size_t position) const {
+    // A keep-chomped scalar of blank lines only: granit's token starts at the indicator itself.
+    if (content < length_ && (pristine_[content] == '|' || pristine_[content] == '>')) {
+      size_t end = position;
+      while (end > content + 1 && space(pristine_[end - 1])) --end;
+      return pack(content, end - content);
+    }
+    // The header line (`|`, `>-`, `!tag |2 # comment`) is the last non-blank line before the content.
+    size_t at = content;
+    while (at > 0 && pristine_[at - 1] != '\n') --at;  // start of the content's line
+    size_t header_end = content, header = at;
+    // An empty block scalar's token can sit at the end of its header line (`keep: |+`).
+    bool own_line = true;
+    for (size_t i = at; i < content && own_line; ++i) own_line = pristine_[i] == ' ' || pristine_[i] == '\t';
+    for (; own_line;) {
+      if (at == 0) return 0;
+      header_end = at - 1, header = header_end;
+      while (header > 0 && pristine_[header - 1] != '\n') --header;
+      bool blank_line = true;
+      for (size_t i = header; i < header_end && blank_line; ++i) blank_line = pristine_[i] == ' ' || pristine_[i] == '\t' || pristine_[i] == '\r';
+      if (!blank_line) break;
+      at = header;
+    }
+    size_t indicator = SIZE_MAX;
+    for (size_t i = header; i < header_end; ++i) {
+      char c = pristine_[i];
+      if (c == '#' && i > header && (pristine_[i - 1] == ' ' || pristine_[i - 1] == '\t')) break;
+      if (c == '|' || c == '>') indicator = i;
+    }
+    if (indicator == SIZE_MAX) return 0;
+    size_t end = position;
+    while (end > indicator + 1 && space(pristine_[end - 1])) --end;
+    return pack(indicator, end - indicator);
+  }
+  // lexical_slow with the driver's token span. The input is never filtered in place on this path,
+  // so scalars outside it (escaped, folded, block) are owned copies whose source comes from the
+  // token alone; the results follow the rapidyaml rules above.
+  [[gnu::noinline]] uint64_t lexical_external(const char* text, size_t length, scalar_style style) const {
+    const size_t begin = external_position_.begin, end = external_position_.end;
+    if (begin > end || end > length_) return 0;
+    switch (style) {
+      case scalar_style::plain:
+        if (in_input(text, length) && !blank(text, length)) return pack(size_t(text - input_), length);
+        if (!has_newline(newlines_, begin, end)) return pack(begin, end - begin);
+        return pristine_ ? pack(begin, end - begin) : 0;
+      case scalar_style::single_quoted:
+      case scalar_style::double_quoted: {
+        const char quote = style == scalar_style::single_quoted ? '\'' : '"';
+        if (!pristine_ || end - begin < 2 || pristine_[begin] != quote || pristine_[end - 1] != quote) return 0;
+        return pack(begin, end - begin);
+      }
+      case scalar_style::literal:
+      case scalar_style::folded:
+        return pristine_ ? block_span(begin, end) : 0;
+    }
+    return 0;
+  }
+#endif
 
   // rapidyaml filters JSON-style surrogate escapes as separate three-byte UTF-8 sequences.
   // Accept a paired UTF-16 escape as one Unicode scalar (JSON compatibility), and reject all
@@ -1898,6 +1982,9 @@ class handler : public c4::yml::EventHandlerStack<handler, handler_state> {
   bool fast_paths_ = true;
   bool fused_duplicates_ = true;
   const char* key_at_ = nullptr;  // source start of the scalar key being placed, for error positions
+#ifdef TD_YAML_PARSER_RUST
+  source_position external_position_;  // the event rust_source.h is delivering
+#endif
 };
 
 }  // namespace truffledata::yaml

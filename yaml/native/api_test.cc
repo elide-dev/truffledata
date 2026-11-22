@@ -354,6 +354,13 @@ void allocation_failures() {
 
   // Steady state: after warm-up a session decodes without any upstream allocation and keeps a
   // bounded number of blocks.
+#ifdef TD_YAML_PARSER_RUST
+  // With the Rust parser backend this pins the decoder side only (arena, index memory, input
+  // buffer): granit-parser allocates on the Rust global allocator in every decode (it has no
+  // reusable parser state), which is outside index_memory and maxIndexBytes by the 2026-11-14
+  // ruling and is bounded indirectly (input size limit, granit's 255 nesting cap, max_depth,
+  // max_aliases). //yaml/native/rs:test pins that it grows linearly with the input.
+#endif
   yaml_session s(session_options{});
   for (int i = 0; i < 3; ++i) s.decode(reinterpret_cast<const uint8_t*>(doc.data()), doc.size(), 0);
   size_t blocks = s.arena_blocks(), allocations = s.memory().allocations();

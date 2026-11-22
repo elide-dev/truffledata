@@ -1,0 +1,14 @@
+# yaml-test-suite (data-2022-01-17) cases that TruffleData's YAML handler fails when driven by the
+# opt-in Rust parser backend (granit-parser 2.1.0 through yaml/native/rust_source.h), read by
+# //yaml/conformance:yaml_test_suite_rs.
+#
+# Format, one case per line: ID<TAB>reason<TAB>upstream link
+#   ID      the case directory, e.g. 229Q or Y79Y/004
+#   reason  what goes wrong
+#   link    the granit-parser issue, https://github.com/bourumir-wyngs/granit-parser/issues/<n>
+#
+# Same rule as expected_failures.txt: a case that fails because of the handler or the driver is
+# fixed, never listed; only a genuine granit-parser defect with a ruling and an upstream issue may
+# be. The list is exact: a listed case that passes fails the test.
+#
+# Empty: every case passes through the handler.

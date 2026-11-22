@@ -1,6 +1,7 @@
 load("//tools/fuzz:defs.bzl", "native_fuzzer")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 load("//bazel:myna.bzl", "myna_bindings", "myna_other_class_stub")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 # Test-only yaml-test-suite event renderer over rapidyaml's ParseEngine. Header-only and
 # configuration-neutral: link it with exactly one of @rapidyaml//:ryml or @rapidyaml//:ryml_assert.
@@ -129,6 +130,169 @@ cc_library(
     }),
     visibility = ["//visibility:public"],
     deps = [":decoder"],
+)
+
+# ---- The opt-in pure-Rust parser backend (granit-parser, yaml/native/rs) -----------------------
+# The same decoder core with rust_source.h in place of rapidyaml's ParseEngine. TD_YAML_PARSER_RUST
+# reaches every translation unit that includes session.h through `defines`. Evaluation only: no
+# release archive, artifact or Java route links these targets; :truffledata_yaml stays on rapidyaml.
+cc_library(
+    name = "decoder_rs",
+    hdrs = ["rust_source.h"],
+    copts = ["-std=c++17"],
+    defines = ["TD_YAML_PARSER_RUST"],
+    visibility = ["//yaml:__subpackages__"],
+    deps = [
+        ":decoder",
+        "//yaml/native/rs:truffledata_yaml_parser",
+    ],
+)
+
+cc_library(
+    name = "truffledata_yaml_rs",
+    srcs = ["api.cc"],
+    hdrs = [
+        "api.h",
+        "generated/seam.h",
+    ],
+    copts = [
+        "-std=c++17",
+        "-O3",
+    ],
+    linkopts = select({
+        "@platforms//os:macos": ["-lc++"],
+        "//conditions:default": [
+            "-lc++",
+            "-lc++abi",
+        ],
+    }),
+    visibility = ["//yaml:__subpackages__"],
+    deps = [":decoder_rs"],
+)
+
+cc_binary(
+    name = "yaml_rs_shared.so",
+    srcs = ["api.cc"],
+    copts = [
+        "-std=c++17",
+        "-O3",
+    ],
+    linkopts = select({
+        "@platforms//os:macos": ["-Wl,-install_name,@rpath/libtruffledata_yaml_rs.dylib", "-Wl,-dead_strip_dylibs"],
+        "//conditions:default": [],
+    }),
+    linkshared = True,
+    linkstatic = True,
+    visibility = ["//yaml:__subpackages__"],
+    deps = [":truffledata_yaml_rs"],
+)
+
+# Design step 8: the semantics, stream, typed and API suites on the Rust backend. Assertions that
+# pin rapidyaml's own parser behaviour are split with TD_YAML_PARSER_RUST in the sources.
+cc_test(
+    name = "semantics_test_rs",
+    srcs = ["semantics_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":decoder_rs",
+        ":testing",
+    ],
+)
+
+cc_test(
+    name = "typed_test_rs",
+    srcs = ["typed_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":decoder_rs",
+        ":testing",
+    ],
+)
+
+cc_test(
+    name = "stream_test_rs",
+    size = "medium",
+    srcs = ["stream_test.cc"],
+    args = ["$(rootpaths :testdata)"],
+    copts = ["-std=c++17"],
+    data = [":testdata"],
+    deps = [
+        ":testing",
+        ":truffledata_yaml_rs",
+    ],
+)
+
+cc_test(
+    name = "api_test_rs",
+    size = "medium",
+    srcs = ["api_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":testing",
+        ":truffledata_yaml_rs",
+        "@myna//:values_headers",
+    ],
+)
+
+cc_test(
+    name = "rust_source_test",
+    srcs = ["rust_source_test.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":decoder_rs",
+        ":testing",
+    ],
+)
+
+# The differential against rapidyaml: one dumper per parser (a binary holds one), compared by
+# :differential_test over the suite inputs, probe fixtures, session corpus and 5,000 seeded
+# generated documents under eight policies.
+cc_binary(
+    name = "diff_dump",
+    testonly = True,
+    srcs = ["diff_dump.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":tape_events",
+        ":testing",
+    ],
+)
+
+cc_binary(
+    name = "diff_dump_rs",
+    testonly = True,
+    srcs = ["diff_dump.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":decoder_rs",
+        ":tape_events",
+        ":testing",
+    ],
+)
+
+cc_test(
+    name = "differential_test",
+    size = "large",
+    srcs = ["differential_test.cc"],
+    args = [
+        "--ryml=$(rootpath :diff_dump)",
+        "--rs=$(rootpath :diff_dump_rs)",
+        "--exclusions=$(rootpath differential_exclusions.txt)",
+        "--generated=5000",
+        "--seed=20261114",
+        "$(rootpaths :testdata)",
+        "$(rootpaths :session_corpus)",
+        "$(rootpaths @yaml_test_suite//:inputs)",
+    ],
+    copts = ["-std=c++17"],
+    data = [
+        "differential_exclusions.txt",
+        ":diff_dump",
+        ":diff_dump_rs",
+        ":session_corpus",
+        ":testdata",
+        "@yaml_test_suite//:inputs",
+    ],
 )
 
 # The C ABI headers for consumers of the release archive (the isolated archive test).
@@ -269,7 +433,10 @@ filegroup(
     name = "session_corpus",
     testonly = True,
     srcs = glob(["corpus/session/*"]),
-    visibility = ["//yaml/cells/tests:__pkg__"],
+    visibility = [
+        "//yaml/cells/tests:__pkg__",
+        "//yaml/native/rs:__pkg__",
+    ],
 )
 
 cc_test(
@@ -497,6 +664,53 @@ native_fuzzer(
     name = "session",
     src = "session_fuzz.cc",
     deps = [":decoder"],
+)
+
+# Design step 9: the session harness (session_fuzz.cc, same oracle) on the Rust backend. The
+# replay runs the shared session corpus in ordinary testing; the campaign needs --config=fuzz
+# (C++ instrumented) plus -Zsanitizer=address for the Rust code (docs/FUZZING.md).
+cc_binary(
+    name = "session_rs_replay_bin",
+    testonly = True,
+    srcs = ["session_fuzz.cc"],
+    copts = ["-std=c++17"],
+    deps = [
+        ":decoder_rs",
+        "//tools/fuzz:replay",
+    ],
+)
+
+sh_test(
+    name = "session_rs_replay",
+    srcs = ["//tools/fuzz:run.sh"],
+    args = ["$(rootpath :session_rs_replay_bin)"] + ["$(rootpath " + s + ")" for s in glob(["corpus/session/*"])],
+    data = [":session_rs_replay_bin"] + glob(["corpus/session/*"]),
+)
+
+cc_binary(
+    name = "session_rs_fuzzer",
+    testonly = True,
+    srcs = ["session_fuzz.cc"],
+    copts = ["-std=c++17"],
+    linkopts = ["-fsanitize=fuzzer"],
+    tags = ["manual"],
+    target_compatible_with = select({
+        "//tools/fuzz:enabled": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [":decoder_rs"],
+)
+
+sh_test(
+    name = "session_rs_fuzz",
+    size = "medium",
+    srcs = ["//tools/fuzz:campaign.sh"],
+    args = ["$(rootpath :session_rs_fuzzer)"] + ["$(rootpath " + s + ")" for s in glob(["corpus/session/*"])],
+    data = [":session_rs_fuzzer"] + glob(["corpus/session/*"]),
+    tags = [
+        "fuzz",
+        "manual",
+    ],
 )
 
 # Test-only: a library reporting the fingerprint of the ABI class this host is not, which YAML's

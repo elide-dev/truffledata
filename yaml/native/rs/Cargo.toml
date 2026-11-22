@@ -1,0 +1,15 @@
+[package]
+name = "truffledata-yaml-parser"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+# Pure-Rust YAML 1.2 parser (forbid(unsafe_code)); comments compiled out. Pinned exactly: review the
+# upstream diff before any upgrade (design Q11).
+granit-parser = { version = "=2.1.0", default-features = false, features = ["std", "error_messages"] }
