@@ -117,7 +117,7 @@ Every artifact is in the `dev.elide` group, for example `dev.elide:truffledata-c
 | `truffledata-bebop` | **Experimental.** Bebop encoding and decoding (general and strict profiles), `bebopc` descriptor loading, in-place rows, arrays and column views; pure Java |
 | `truffledata-bom` | Aligned libraries, drivers and runtime dependencies |
 
-The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.31`**.
+The runtime baseline is **Java 25** and **Elide GraalVM `25.5.5-elide.33`**.
 Libraries are thin JARs; choose the adapters and guest runtimes your application needs.
 Driver-specific artifacts bring their upstream drivers transitively.
 
@@ -125,20 +125,24 @@ Driver-specific artifacts bring their upstream drivers transitively.
 repositories {
     mavenCentral()
     maven("https://maven.elide.dev")
-    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.31")
+    maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.33")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.15.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.16.0"))
     implementation("dev.elide:truffledata-core")
     implementation("dev.elide:truffledata-protobuf")
     // Add JDBC integrations or protobuf-buffa as needed.
 }
 ```
 
-[Release 0.15.0](https://github.com/elide-dev/truffledata/releases/tag/v0.15.0) includes
+[Release 0.16.0](https://github.com/elide-dev/truffledata/releases/tag/v0.16.0) includes
 source/Javadoc JARs, consumer POMs, Gradle metadata, signatures, checksums, and
 Buffa, JSON, YAML and CSV native attachments. See
 [publishing and consumption](docs/PUBLISHING.md) for Maven, Bazel and native linking.
+
+Release **0.16.0** moves the JVM and Native Image builds and the BOM to Elide GraalVM
+`25.5.5-elide.33`; update the GraalVM repository URL with the BOM. The native libraries stay on
+Elide toolchain 2026.11.7 and Myna 0.20.0. See the [0.16.0 notes](docs/RELEASE_0_16_0.md).
 
 Release **0.15.0** updates the native libraries to Elide toolchain 2026.11.7 and the bindings
 to Myna 0.20.0. Buffa and the experimental Bebop validator compile Myna’s implementation

@@ -22,7 +22,7 @@ repositories {
         }
         filter { includeGroup 'dev.elide' }
     }
-    maven { url = 'https://maven.elide.dev/gvm-elide/25.5.5-elide.31' }
+    maven { url = 'https://maven.elide.dev/gvm-elide/25.5.5-elide.33' }
     mavenCentral()
 }
 dependencies {

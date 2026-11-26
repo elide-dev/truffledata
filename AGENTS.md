@@ -171,3 +171,14 @@ publication, and public artifact verification. Central stays deferred under #28 
 resets (2026-12-01); do not retry it without instruction. The same evidence, safety and
 honest-reporting rules apply. No benchmark capture is taken; there is no performance claim. Never
 add `Co-Authored-By` trailers for Claude.
+
+# 0.16.0 release authorization (2026-11-26)
+
+Sam instructed: "we need to bump to toolchain `2026.11.7` (as applicable), bump gvm to `.33`, then
+issue a release". The toolchain was already pinned to 2026.11.7 by 0.15.0, so this authorizes:
+pinning Elide GraalVM 25.5.5-elide.33 (CE and EE dists, sha256-pinned) and repinning
+`maven_install.json`, the release PR/CI/merge, signed tag `v0.16.0` (the BOM-managed GraalVM
+versions and consumer repository URL change, so a minor version), Elide Maven and GitHub
+publication, and public artifact verification. Myna stays at 0.20.0 (0.21.0 was not requested).
+Central stays deferred under #28; do not retry it without instruction. No benchmark capture is
+taken; there is no performance claim. Never add `Co-Authored-By` trailers for Claude.
