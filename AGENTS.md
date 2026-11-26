@@ -182,3 +182,24 @@ versions and consumer repository URL change, so a minor version), Elide Maven an
 publication, and public artifact verification. Myna stays at 0.20.0 (0.21.0 was not requested).
 Central stays deferred under #28; do not retry it without instruction. No benchmark capture is
 taken; there is no performance claim. Never add `Co-Authored-By` trailers for Claude.
+
+## 0.16.0 release completion (2026-11-26)
+
+0.16.0 is released on Elide Maven and GitHub from signed tag `v0.16.0` at
+`a46989237c491a0ecb7731c352c2a30441c14c3f` (#128). Main CI and Untrusted input passed on that
+commit; as before, the publish skipped the gates they had run and kept the per-platform consumer
+gates, with the macOS gates and natives on the self-hosted executor (`--config=remote_macos`) from a
+Linux host via `MACOS_NATIVES`. Central was not attempted (#28). Receipts:
+`benchmarks/results/release-0.16.0/`. Host notes for Linux publishers: the root volume refused
+writes past ~8 GB while `df` showed free space, so the publish used
+`--output_user_root=/build/caches/bazel/truffledata`; GitHub asset uploads stalled until a route
+with a lower MTU was added for `uploads.github.com` (path-MTU black hole on that route).
+
+# 0.17.0 release authorization (2026-11-26)
+
+Sam instructed: "`0.22.0` of Myna is out, we should bump and issue another release and this time
+fucking finish". That authorizes: pinning Myna 0.22.0 and regenerating/re-vendoring the bindings,
+the release PR/CI/merge, signed tag `v0.17.0`, Elide Maven and GitHub publication through to a
+complete, non-draft GitHub release, and public artifact verification. Central stays deferred under
+#28; do not retry it without instruction. No benchmark capture is taken; there is no performance
+claim. Never add `Co-Authored-By` trailers for Claude.

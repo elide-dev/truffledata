@@ -1,6 +1,6 @@
 module(
     name = "truffledata",
-    version = "0.16.0",
+    version = "0.17.0",
 )
 
 bazel_dep(name = "platforms", version = "1.1.0")
@@ -360,10 +360,10 @@ use_repo(crate, "crates", simdutf_src = "crates__simdutf-0.7.0")
 http_archive(
     name = "myna",
     build_file = "//bazel:myna.BUILD",
-    sha256 = "4e291ba497318eccfea75f1006a013b0370b77475391af631449c1b197818f2b",
-    strip_prefix = "myna-0.20.0",
+    sha256 = "a1153ecebc950dedafdc1d7175c64bf594a68572bc4b753d3576bbeb54a5f5a0",
+    strip_prefix = "myna-0.22.0",
     type = "tar.gz",
-    urls = ["https://github.com/elide-dev/myna/releases/download/v0.20.0/myna-source-0.20.0.tar.gz"],
+    urls = ["https://github.com/elide-dev/myna/releases/download/v0.22.0/myna-source-0.22.0.tar.gz"],
 )
 
 # Production JSON adapter: match the parser qualified by Myna's value ABI tests.
