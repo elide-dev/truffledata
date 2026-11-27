@@ -128,17 +128,22 @@ repositories {
     maven("https://maven.elide.dev/gvm-elide/25.5.5-elide.33")
 }
 dependencies {
-    implementation(platform("dev.elide:truffledata-bom:0.17.0"))
+    implementation(platform("dev.elide:truffledata-bom:0.18.0"))
     implementation("dev.elide:truffledata-core")
     implementation("dev.elide:truffledata-protobuf")
     // Add JDBC integrations or protobuf-buffa as needed.
 }
 ```
 
-[Release 0.17.0](https://github.com/elide-dev/truffledata/releases/tag/v0.17.0) includes
+[Release 0.18.0](https://github.com/elide-dev/truffledata/releases/tag/v0.18.0) includes
 source/Javadoc JARs, consumer POMs, Gradle metadata, signatures, checksums, and
 Buffa, JSON, YAML and CSV native attachments. See
 [publishing and consumption](docs/PUBLISHING.md) for Maven, Bazel and native linking.
+
+Release **0.18.0** regenerates the bindings with Myna 0.23.0 and moves the native libraries to
+Elide toolchain 2026.11.8. The generated ABI fingerprints change for every seam, so upgrade the BOM,
+bindings and native attachments together. GraalVM stays on `25.5.5-elide.33`. See the
+[0.18.0 notes](docs/RELEASE_0_18_0.md).
 
 Release **0.17.0** regenerates the bindings with Myna 0.22.0. The generated ABI fingerprints
 change for every seam, so upgrade the BOM, bindings and native attachments together. GraalVM stays
