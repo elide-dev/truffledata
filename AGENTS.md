@@ -203,3 +203,14 @@ the release PR/CI/merge, signed tag `v0.17.0`, Elide Maven and GitHub publicatio
 complete, non-draft GitHub release, and public artifact verification. Central stays deferred under
 #28; do not retry it without instruction. No benchmark capture is taken; there is no performance
 claim. Never add `Co-Authored-By` trailers for Claude.
+
+## 0.17.0 release completion (2026-11-26)
+
+0.17.0 is released on Elide Maven and GitHub from signed tag `v0.17.0` at
+`4d4c47488ecf2b6a675de57b3811528c8a92fc3b` (#129), on Myna 0.22.0. Main CI and Untrusted input
+passed on that commit; the publish skipped the gates they had run and kept the per-platform consumer
+gates (macOS on `--config=remote_macos`). Central was not attempted (#28). The public Maven files and
+all 92 GitHub assets were verified against the staged bytes. Receipts:
+`benchmarks/results/release-0.17.0/`. When a release bumps the module version, refresh
+`MODULE.bazel.lock` with a build before pushing: the benchmark simulation job fails if the lockfile
+changes during its build.
