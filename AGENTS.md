@@ -231,3 +231,14 @@ publish on the unreleased archive pin. (Myna published 0.23.0 at 2026-11-27 19:4
 release tarball matches its `SHA256SUMS` and the tag archive's contents, and is now pinned.) Central stays deferred under #28; do not retry it without
 instruction. No benchmark capture is taken; there is no performance claim. Never add
 `Co-Authored-By` trailers for Claude.
+
+## 0.18.0 release completion (2026-11-27)
+
+0.18.0 is released on Elide Maven and GitHub from signed tag `v0.18.0` at
+`bc4078df0fd95de7fd696858af839ec307ff12c5` (#132), on Myna 0.23.0 and Elide toolchain 2026.11.8.
+Main CI and Untrusted input passed on that commit; the publish skipped the gates they had run and kept
+the per-platform consumer gates (macOS on `--config=remote_macos`). Central was not attempted (#28).
+The public Maven files and all 92 GitHub assets were verified against the staged bytes. Receipts:
+`benchmarks/results/release-0.18.0/`. When the toolchain moves, also update the ASan add-on digest in
+`MODULE.bazel` (it is pinned separately from the bundles). Open: adopting Myna's Truffle upcall cells
+and receiver-bound upcalls as an opt-in native-to-guest delivery route (not authorized yet).
