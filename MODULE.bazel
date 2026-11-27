@@ -1,6 +1,6 @@
 module(
     name = "truffledata",
-    version = "0.17.0",
+    version = "0.18.0",
 )
 
 bazel_dep(name = "platforms", version = "1.1.0")
@@ -217,12 +217,12 @@ go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 # ---- C/C++: elide-dev/toolchain (LLVM 23, libc++, lld, ThinLTO bitcode sysroots).
-ELIDE_TOOLCHAIN = "2026.11.7"
+ELIDE_TOOLCHAIN = "2026.11.8"
 
 ELIDE_TOOLCHAIN_BUNDLES = {
-    "darwin_arm64": ("darwin-arm64", "69d312ff9d0bf7158942e9d7220278930c4106d5b246482485e2f7da1a6db4c7"),
-    "linux_amd64": ("linux-amd64", "697cb494450d47630629e5ac905bca8400611030361305e32b86eb818ae407a5"),
-    "linux_arm64": ("linux-arm64", "ed353fbc779d2179de2c0631c6e1de56fe9ebda3a981460d01d34239da4058a8"),
+    "darwin_arm64": ("darwin-arm64", "c17a16c5d93e5ff146cf2550b53cb937334aa06f10c598b372e0d8ed69d67a9f"),
+    "linux_amd64": ("linux-amd64", "6e4f7ac552af064d92d04b103d7b4904c5d7ab0d054d1ccd4f374c1d4c63dc72"),
+    "linux_arm64": ("linux-arm64", "7d5f7c2bf61fbdc9fd1d9a1e89ab732857c4a2ca1693ce9bd5e53c45cfef0045"),
 }
 
 [http_archive(
@@ -270,7 +270,7 @@ http_file(
 # Optional Buffa backend: reproducible Rust compilation under the same RBE toolchain.
 bazel_dep(name = "rules_rust", version = "0.74.0")
 
-# Match elide-dev/toolchain v2026.11.7 rustversion (LLVM 23.1.3; unchanged since v2026.11.1).
+# Match elide-dev/toolchain v2026.11.8 rustversion (LLVM 23.1.3; unchanged since v2026.11.1).
 RUST_VERSION = "nightly/2026-10-09"
 
 RUST_SHA256S = {
@@ -360,10 +360,10 @@ use_repo(crate, "crates", simdutf_src = "crates__simdutf-0.7.0")
 http_archive(
     name = "myna",
     build_file = "//bazel:myna.BUILD",
-    sha256 = "a1153ecebc950dedafdc1d7175c64bf594a68572bc4b753d3576bbeb54a5f5a0",
-    strip_prefix = "myna-0.22.0",
+    sha256 = "07def2d8a98277015f73f663554594e64323704f4d5d34072faf5a9a7c4b66c0",
+    strip_prefix = "myna-0.23.0",
     type = "tar.gz",
-    urls = ["https://github.com/elide-dev/myna/releases/download/v0.22.0/myna-source-0.22.0.tar.gz"],
+    urls = ["https://github.com/elide-dev/myna/releases/download/v0.23.0/myna-source-0.23.0.tar.gz"],
 )
 
 # Production JSON adapter: match the parser qualified by Myna's value ABI tests.

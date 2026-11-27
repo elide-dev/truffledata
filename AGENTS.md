@@ -214,3 +214,20 @@ all 92 GitHub assets were verified against the staged bytes. Receipts:
 `benchmarks/results/release-0.17.0/`. When a release bumps the module version, refresh
 `MODULE.bazel.lock` with a build before pushing: the benchmark simulation job fails if the lockfile
 changes during its build.
+
+# 0.18.0 release authorization (2026-11-27)
+
+Sam instructed: "can we build against `myna`'s upcoming `0.23.0` release, then pin when it's
+released, and release ourselves? ... `trufflecel` and downstream from that `elide` are waiting on
+us", then "toolchain `2026.11.8`, gvm `.33`, are both also out" and to adopt Myna's new features and
+re-seam. Sam then chose "release bump first": 0.18.0 pins Myna 0.23.0 and Elide toolchain 2026.11.8
+(GraalVM is already on 25.5.5-elide.33) and regenerates/re-vendors the bindings; adopting Myna's
+Truffle upcall cells and receiver-bound upcalls (a new, opt-in native-to-guest delivery route) is a
+separate follow-up, not part of 0.18.0. This authorizes building against the unreleased Myna tag
+commit (`6dcdd38`, GitHub archive), swapping in the released `myna-source-0.23.0.tar.gz` once Myna
+publishes it, the release PR/CI/merge, signed tag `v0.18.0`, Elide Maven and GitHub publication
+through to a complete, non-draft GitHub release, and public artifact verification. Do not tag or
+publish on the unreleased archive pin. (Myna published 0.23.0 at 2026-11-27 19:45 UTC; the
+release tarball matches its `SHA256SUMS` and the tag archive's contents, and is now pinned.) Central stays deferred under #28; do not retry it without
+instruction. No benchmark capture is taken; there is no performance claim. Never add
+`Co-Authored-By` trailers for Claude.
